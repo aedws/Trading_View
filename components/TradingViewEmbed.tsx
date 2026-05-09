@@ -17,8 +17,7 @@ type Props = {
   height?: number;
 };
 
-/** Best-effort conversion of common Yahoo tickers to TradingView symbols. */
-function toTradingViewSymbol(s: string): string {
+export function toTradingViewSymbol(s: string): string {
   const t = s.trim().toUpperCase();
   if (!t) return "NASDAQ:AAPL";
   if (t.includes(":")) return t;
@@ -34,74 +33,115 @@ function toTradingViewSymbol(s: string): string {
   return t;
 }
 
+/** TV 웹 URL은 보통 `EXCHANGE-TICKER`(하이픈) 경로를 씁니다. */
+export function tradingViewWebPath(tvSymbol: string): string {
+  return tvSymbol.replace(/^(.+):(.+)$/, "$1-$2");
+}
+
 export default function TradingViewEmbed({ symbol, height = 760 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const tvSymbol = toTradingViewSymbol(symbol);
-    const container = containerRef.current;
-    container.innerHTML = "";
 
-    const widgetDiv = document.createElement("div");
-    widgetDiv.className = "tradingview-widget-container__widget";
-    widgetDiv.style.height = "100%";
-    widgetDiv.style.width = "100%";
-    container.appendChild(widgetDiv);
+    let cancelled = false;
+    let raf1 = 0;
+    let raf2 = 0;
 
-    const script = document.createElement("script");
-    script.src =
-      "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
-    script.async = true;
-    script.type = "text/javascript";
-    script.innerHTML = JSON.stringify({
-      autosize: true,
-      symbol: tvSymbol,
-      interval: "D",
-      timezone: "Asia/Seoul",
-      theme: "dark",
-      style: "1",
-      locale: "kr",
-      enable_publishing: false,
-      withdateranges: true,
-      hide_side_toolbar: false,
-      allow_symbol_change: true,
-      details: true,
-      hotlist: false,
-      calendar: false,
-      studies: [
-        "MASimple@tv-basicstudies",
-        "BB@tv-basicstudies",
-        "RSI@tv-basicstudies",
-        "MACD@tv-basicstudies",
-      ],
-      support_host: "https://www.tradingview.com",
+    /** autosize만 쓰면 부모 너비가 0인 첫 프레임에 데모 심볼로 떨어지거나 높이가 붕괴됩니다. 픽셀 크기를 명시합니다. */
+    function inject() {
+      if (cancelled) return;
+      const el = containerRef.current;
+      if (!el) return;
+      const tvSymbol = toTradingViewSymbol(symbol);
+      const w = Math.max(
+        280,
+        Math.floor(el.getBoundingClientRect().width)
+      );
+      const h = Math.max(320, Math.floor(height));
+
+      el.innerHTML = "";
+
+      const widgetDiv = document.createElement("div");
+      widgetDiv.className = "tradingview-widget-container__widget";
+      widgetDiv.style.height = `${h}px`;
+      widgetDiv.style.width = "100%";
+      widgetDiv.style.minHeight = `${h}px`;
+      el.appendChild(widgetDiv);
+
+      const script = document.createElement("script");
+      script.src =
+        "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+      script.async = true;
+      script.type = "text/javascript";
+      script.innerHTML = JSON.stringify({
+        autosize: false,
+        width: w,
+        height: h,
+        symbol: tvSymbol,
+        interval: "D",
+        timezone: "Asia/Seoul",
+        theme: "dark",
+        style: "1",
+        locale: "kr",
+        enable_publishing: false,
+        withdateranges: true,
+        hide_side_toolbar: false,
+        allow_symbol_change: true,
+        details: true,
+        hotlist: false,
+        calendar: false,
+        studies: [
+          "MASimple@tv-basicstudies",
+          "BB@tv-basicstudies",
+          "RSI@tv-basicstudies",
+          "MACD@tv-basicstudies",
+        ],
+        support_host: "https://www.tradingview.com",
+      });
+      el.appendChild(script);
+    }
+
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(inject);
     });
-    container.appendChild(script);
 
     return () => {
-      container.innerHTML = "";
+      cancelled = true;
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      const elCleanup = containerRef.current;
+      if (elCleanup) elCleanup.innerHTML = "";
     };
-  }, [symbol]);
+  }, [symbol, height]);
 
   return (
-    <div className="rounded-xl overflow-hidden border border-border bg-bg-card">
+    <div className="rounded-xl overflow-hidden border border-border bg-bg-card shrink-0">
       <div
         ref={containerRef}
-        className="tradingview-widget-container"
-        style={{ height, width: "100%" }}
+        className="tradingview-widget-container w-full isolate"
+        style={{
+          height,
+          minHeight: height,
+          width: "100%",
+        }}
       />
-      <div className="px-3 py-2 text-[10px] text-gray-500 border-t border-border-soft flex items-center justify-between">
+      <div className="px-3 py-2 text-[10px] text-gray-500 border-t border-border-soft flex items-center justify-between gap-2 flex-wrap">
         <span>
-          TradingView 공식 위젯 — 인터벌·지표·드로잉 모두 우상단 도구막대에서.
+          <span className="text-gray-400">TV 심볼</span>{" "}
+          <code className="text-accent-cyan num text-[10px]">
+            {toTradingViewSymbol(symbol)}
+          </code>
+          <span className="text-gray-600 mx-1">·</span>
+          인터벌·지표·드로잉은 차트 우상단에서.
         </span>
         <a
           href={`https://www.tradingview.com/symbols/${encodeURIComponent(
-            toTradingViewSymbol(symbol)
+            tradingViewWebPath(toTradingViewSymbol(symbol))
           )}/`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-accent-blue hover:underline"
+          className="text-accent-blue hover:underline shrink-0"
         >
           TV에서 열기 ↗
         </a>

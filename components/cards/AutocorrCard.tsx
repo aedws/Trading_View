@@ -56,7 +56,7 @@ export default function AutocorrCard({ report }: { report: AnalysisReport }) {
       }}
     >
       <div className="mt-1">
-        <Bars items={items} height={84} zeroLine />
+        <Bars items={items} height={92} zeroLine />
         <div className="flex justify-between text-[9px] text-gray-500 mt-1">
           <span>lag</span>
           <span>색칠 = 95% 밴드 ±{fmtNum(band, 3)} 초과</span>

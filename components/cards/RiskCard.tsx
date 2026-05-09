@@ -57,7 +57,7 @@ export default function RiskCard({ report }: { report: AnalysisReport }) {
           <span>낙폭(drawdown) — 0%가 신고가</span>
           <span>최대 낙폭 {fmtPct(r.mdd, 1)} · {r.daysToRecover != null ? `회복까지 ${r.daysToRecover}일` : "아직 미회복"}</span>
         </div>
-        <Sparkline values={dd} color="#ef4444" height={120} zeroLine={0} yMax={0.01} />
+        <Sparkline values={dd} color="#ef4444" height={132} zeroLine={0} yMax={0.01} />
       </div>
     </IndicatorCard>
   );

@@ -94,7 +94,7 @@ export default function RegressionChannelCard({
             { values: dn1, color: "#a855f7", dashed: true },
           ]}
           color="#e5e7eb"
-          height={140}
+          height={132}
         />
       </div>
     </IndicatorCard>

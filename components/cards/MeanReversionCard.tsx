@@ -71,7 +71,7 @@ export default function MeanReversionCard({
         <Sparkline
           values={spread}
           color="#a855f7"
-          height={100}
+          height={132}
           zeroLine={0}
         />
       </div>

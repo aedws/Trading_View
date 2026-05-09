@@ -63,7 +63,7 @@ export default function WaveletCard({ report }: { report: AnalysisReport }) {
       <div className="mt-1">
         <Bars
           items={items}
-          height={70}
+          height={92}
           formatValue={(v) => `${(v * 100).toFixed(0)}%`}
         />
         <div className="text-[9px] text-gray-500 mt-1 text-center">

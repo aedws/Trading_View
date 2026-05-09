@@ -74,7 +74,7 @@ export default function ZScoreCard({ report }: { report: AnalysisReport }) {
         <Sparkline
           values={zVals}
           color="#3b82f6"
-          height={100}
+          height={132}
           zeroLine={0}
           overlays={[
             { values: zVals.map(() => 2), color: "#ef4444", dashed: true },

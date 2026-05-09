@@ -44,7 +44,7 @@ export default function HilbertCard({ report }: { report: AnalysisReport }) {
         <Sparkline
           values={series}
           color="#3b82f6"
-          height={110}
+          height={132}
           overlays={[{ values: env, color: "#06b6d4" }]}
         />
       </div>

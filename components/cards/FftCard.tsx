@@ -61,7 +61,7 @@ export default function FftCard({ report }: { report: AnalysisReport }) {
           <span>로그-주기 스펙트럼 (왼쪽=짧은 주기, 오른쪽=긴 주기)</span>
           <span className="text-accent-cyan">파워 ↑</span>
         </div>
-        <Sparkline values={yNorm} color="#06b6d4" height={110} />
+        <Sparkline values={yNorm} color="#06b6d4" height={132} />
         <div className="flex justify-between text-[9px] text-gray-500">
           <span>{xs[0] ? `${fmtNum(xs[0], 0)}일` : "—"}</span>
           <span>{xs[Math.floor(xs.length / 2)] ? `${fmtNum(xs[Math.floor(xs.length / 2)], 0)}일` : ""}</span>

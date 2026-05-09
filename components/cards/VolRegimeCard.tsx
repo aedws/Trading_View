@@ -63,7 +63,7 @@ export default function VolRegimeCard({ report }: { report: AnalysisReport }) {
         <Sparkline
           values={series}
           color="#eab308"
-          height={100}
+          height={132}
           overlays={[
             { values: series.map(() => v.median), color: "#6b7280", dashed: true },
             { values: series.map(() => v.p95), color: "#ef4444", dashed: true },

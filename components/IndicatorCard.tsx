@@ -62,7 +62,7 @@ export default function IndicatorCard({
 
   return (
     <div
-      className={`rounded-xl border border-border bg-bg-card flex flex-col ${
+      className={`rounded-xl border border-border bg-bg-card flex flex-col h-full min-h-0 ${
         span === "wide" ? "lg:col-span-2" : ""
       }`}
     >
@@ -117,7 +117,7 @@ export default function IndicatorCard({
         </div>
       )}
 
-      <div className="px-4 pb-3 flex-1 flex flex-col gap-3">
+      <div className="px-4 pb-3 flex-1 flex flex-col gap-3 min-h-0">
         {(big || stats) && (
           <div className="flex items-end justify-between gap-3 flex-wrap">
             {big && (
@@ -147,13 +147,15 @@ export default function IndicatorCard({
         {children}
 
         {verdict && (
-          <div
-            className={`text-xs leading-relaxed border rounded-lg px-3 py-2 ${
-              TONE_COLORS[verdict.tone]
-            }`}
-          >
-            <span className="font-semibold mr-2">{verdict.label}</span>
-            <span className="text-gray-200">{verdict.text}</span>
+          <div className="mt-auto pt-0.5">
+            <div
+              className={`text-xs leading-relaxed border rounded-lg px-3 py-2 ${
+                TONE_COLORS[verdict.tone]
+              }`}
+            >
+              <span className="font-semibold mr-2">{verdict.label}</span>
+              <span className="text-gray-200">{verdict.text}</span>
+            </div>
           </div>
         )}
       </div>

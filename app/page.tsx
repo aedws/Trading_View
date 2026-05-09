@@ -67,7 +67,7 @@ export default function HomePage() {
 
       <div className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
         <MarketTickerStrip />
-        <TradingViewEmbed symbol={ticker} height={980} />
+        <TradingViewEmbed key={ticker} symbol={ticker} height={980} />
 
         {error && (
           <div className="rounded-lg border border-accent-red/40 bg-accent-red/10 px-4 py-3 text-sm text-accent-red">

@@ -35,7 +35,7 @@ function Section({
           <p className="text-[11px] text-gray-500 mt-0.5">{description}</p>
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch">
         {children}
       </div>
     </section>

@@ -68,7 +68,7 @@ export default function TailRiskCard({ report }: { report: AnalysisReport }) {
       }}
     >
       <div className="mt-1">
-        <Bars items={items} height={70} />
+        <Bars items={items} height={92} />
         <div className="text-[9px] text-gray-500 mt-1">
           일별 수익률 히스토그램 — 가운데가 0%, 좌측이 손실, 우측이 이익
         </div>
