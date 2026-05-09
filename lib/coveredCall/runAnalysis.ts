@@ -22,6 +22,10 @@ import {
   wealthActive,
 } from "./metricsCc";
 import {
+  fillPortfolioPromptTemplate,
+  formatWeightedYieldFromTrailing,
+} from "./portfolioPromptTemplate";
+import {
   enrichQuoteContext,
   evaluatePrinciples,
   type PrincipleHit,
@@ -329,14 +333,26 @@ export async function runCoveredCallAnalysis(params: {
     compoundVsSimple,
   });
 
-  const aiPrompt = buildAiPrompt({
-    ticker,
-    params,
-    primary,
-    scenarios,
-    grade,
-    principles,
-    quoteNote,
+  const analysisMonths = Math.max(
+    1,
+    Math.round(
+      (new Date(params.end + "T12:00:00Z").getTime() -
+        new Date(params.start + "T12:00:00Z").getTime()) /
+        (30.44 * 86400000),
+    ),
+  );
+
+  const aiPrompt = fillPortfolioPromptTemplate({
+    auto_generated_portfolio_report:
+      md +
+      "\n\n---\n*단일 티커 자동 리포트. 다자산 포트폴리오 시 가중 분배율·섹터 HHI·운용사 수 등은 별도 산출.* " +
+      `분석 구간 약 **${analysisMonths}개월**.`,
+    weighted_yield: formatWeightedYieldFromTrailing(trailingYield),
+    phase_2_expected: "—",
+    year5_distill: "—",
+    sector_hhi: "N/A (단일 자산)",
+    mech_diversity: "N/A (단일 자산)",
+    operator_count: "N/A (단일 자산)",
   });
 
   return {
@@ -423,34 +439,3 @@ function buildMarkdown(ctx: {
   return lines.filter(Boolean).join("\n");
 }
 
-function buildAiPrompt(ctx: {
-  ticker: string;
-  params: {
-    start: string;
-    end: string;
-    periodAmount: number;
-    freq: string;
-  };
-  primary: ScenarioMetrics;
-  scenarios: Record<string, ScenarioMetrics>;
-  grade: { code: string; reason: string };
-  principles: PrincipleHit[];
-  quoteNote: string;
-}): string {
-  return [
-    "You are a quant assistant. User analyzes covered-call / high-yield ETFs with Yahoo Finance backtest (simplified).",
-    "Respond in Korean with bullets; no buy/sell advice; cite mechanism risks (decay, gaps, IV, NAV erosion).",
-    "",
-    `Ticker: ${ctx.ticker} (${ctx.quoteNote})`,
-    `Window: ${ctx.params.start} to ${ctx.params.end}, DCA $${ctx.params.periodAmount} ${ctx.params.freq}`,
-    `Primary scenario IRR ${(ctx.primary.irr * 100).toFixed(2)}%, MDD ${(ctx.primary.mdd * 100).toFixed(2)}%, CoC ${(ctx.primary.cashOnCash * 100).toFixed(2)}%`,
-    `Grade: ${ctx.grade.code} — ${ctx.grade.reason}`,
-    "Three reinvest modes:",
-    ...REINVEST_MODES.map(
-      (m) =>
-        `  ${m}: IRR ${(ctx.scenarios[m].irr * 100).toFixed(2)}%`,
-    ),
-    "Principles snapshot:",
-    ...ctx.principles.map((p) => `  [${p.id}] ${p.verdict}: ${p.note}`),
-  ].join("\n");
-}
