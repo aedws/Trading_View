@@ -14,7 +14,13 @@ import {
 } from "recharts";
 
 import type { ReinvestComparison } from "@/lib/bt/dividends";
-import { fmtMoney, fmtMoneyCompact, fmtPct } from "@/lib/bt/format";
+import type { BacktestCcy } from "@/lib/bt/format";
+import {
+  fmtMoney,
+  fmtMoneyCompact,
+  fmtPct,
+  tickerToBacktestCcy,
+} from "@/lib/bt/format";
 import { useChartZoom } from "@/lib/bt/useChartZoom";
 import { ChartZoomBar } from "./ChartZoomReset";
 
@@ -46,9 +52,11 @@ function downsample<T>(points: T[], maxPoints = 600): T[] {
 export function ReinvestCompareChart({
   ticker,
   comparison,
+  currency,
 }: {
   ticker: string;
   comparison: ReinvestComparison;
+  currency: BacktestCcy;
 }) {
   const reinvestSeries = comparison.reinvest.series;
   const noReinvestSeries = comparison.noReinvest.series;
@@ -121,6 +129,18 @@ export function ReinvestCompareChart({
 
   const altReinvest = comparison.reinvestAlt;
   const altPrincipal = comparison.principalAlt;
+  const altReinvestCcy = altReinvest
+    ? tickerToBacktestCcy(altReinvest.altTicker)
+    : currency;
+  const altPrincipalCcy = altPrincipal
+    ? tickerToBacktestCcy(altPrincipal.altTicker)
+    : currency;
+
+  function tooltipCcy(name: string): BacktestCcy {
+    if (altReinvest && name.startsWith("분배금 →")) return altReinvestCcy;
+    if (altPrincipal && name.startsWith("원금 →")) return altPrincipalCcy;
+    return currency;
+  }
 
   return (
     <div className="rounded-lg border border-border bg-bg-subtle/40 px-4 py-3">
@@ -139,7 +159,7 @@ export function ReinvestCompareChart({
           }`}
         >
           {liftAbs >= 0 ? "+" : ""}
-          {fmtMoney(liftAbs)}
+          {fmtMoney(liftAbs, currency)}
           {liftPct !== null ? (
             <span className="ml-1 text-[10px] text-ink-dim">
               ({liftPct >= 0 ? "+" : ""}
@@ -154,7 +174,7 @@ export function ReinvestCompareChart({
             <span>
               <span className="text-ink-muted">분배금 → {altReinvest.altTicker}:</span>{" "}
               <span className="tabular-nums text-[#60a5fa]">
-                {fmtMoney(altReinvest.finalValue)}
+                {fmtMoney(altReinvest.finalValue, altReinvestCcy)}
               </span>
               {Number.isFinite(altReinvest.totalReturn) ? (
                 <span className="ml-1 tabular-nums">
@@ -164,7 +184,7 @@ export function ReinvestCompareChart({
               ) : null}
               {altReinvest.altCashIn > 0 ? (
                 <span className="ml-1 text-ink-dim">
-                  / 유입 분배금 {fmtMoney(altReinvest.altCashIn)}
+                  / 유입 분배금 {fmtMoney(altReinvest.altCashIn, currency)}
                 </span>
               ) : null}
             </span>
@@ -173,7 +193,7 @@ export function ReinvestCompareChart({
             <span>
               <span className="text-ink-muted">원금 → {altPrincipal.altTicker}:</span>{" "}
               <span className="tabular-nums text-[#c084fc]">
-                {fmtMoney(altPrincipal.finalValue)}
+                {fmtMoney(altPrincipal.finalValue, altPrincipalCcy)}
               </span>
               {Number.isFinite(altPrincipal.totalReturn) ? (
                 <span className="ml-1 tabular-nums">
@@ -209,7 +229,7 @@ export function ReinvestCompareChart({
             <YAxis
               tick={{ fill: "#9aa3b2", fontSize: 11 }}
               stroke="#2c3445"
-              tickFormatter={(v) => fmtMoneyCompact(v)}
+              tickFormatter={(v) => fmtMoneyCompact(v, currency)}
               width={70}
               domain={["auto", "auto"]}
             />
@@ -221,7 +241,10 @@ export function ReinvestCompareChart({
                 fontSize: 12,
               }}
               labelStyle={{ color: "#9aa3b2" }}
-              formatter={(value: number, name) => [fmtMoney(value), name]}
+              formatter={(value: number, name: string) => [
+                fmtMoney(value, tooltipCcy(name)),
+                name,
+              ]}
             />
             <Legend
               verticalAlign="top"

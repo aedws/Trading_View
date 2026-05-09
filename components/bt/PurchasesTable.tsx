@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import type { DcaResult, Purchase } from "@/lib/bt/backtest";
+import type { BacktestCcy } from "@/lib/bt/format";
 import { fmtMoney, fmtNumber } from "@/lib/bt/format";
 
 function buildCsv(result: DcaResult): string {
@@ -39,7 +40,13 @@ function downloadCsv(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-export function PurchasesTable({ result }: { result: DcaResult }) {
+export function PurchasesTable({
+  result,
+  currency,
+}: {
+  result: DcaResult;
+  currency: BacktestCcy;
+}) {
   const [open, setOpen] = useState(false);
   const enriched = useMemo(() => {
     const out: (Purchase & { cumShares: number; cumInvested: number })[] = [];
@@ -93,18 +100,20 @@ export function PurchasesTable({ result }: { result: DcaResult }) {
               {enriched.map((p) => (
                 <tr key={p.date} className="hover:bg-bg-subtle/60">
                   <td className="px-3 py-1.5 text-ink-muted">{p.date}</td>
-                  <td className="px-3 py-1.5 text-right">{fmtMoney(p.price)}</td>
+                  <td className="px-3 py-1.5 text-right">
+                    {fmtMoney(p.price, currency)}
+                  </td>
                   <td className="px-3 py-1.5 text-right">
                     {fmtNumber(p.shares, 6)}
                   </td>
                   <td className="px-3 py-1.5 text-right">
-                    {fmtMoney(p.invested)}
+                    {fmtMoney(p.invested, currency)}
                   </td>
                   <td className="px-3 py-1.5 text-right">
                     {fmtNumber(p.cumShares, 6)}
                   </td>
                   <td className="px-3 py-1.5 text-right">
-                    {fmtMoney(p.cumInvested)}
+                    {fmtMoney(p.cumInvested, currency)}
                   </td>
                 </tr>
               ))}

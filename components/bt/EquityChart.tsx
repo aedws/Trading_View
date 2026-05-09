@@ -13,6 +13,7 @@ import {
 } from "recharts";
 
 import type { DcaResult } from "@/lib/bt/backtest";
+import type { BacktestCcy } from "@/lib/bt/format";
 import { fmtMoney, fmtMoneyCompact } from "@/lib/bt/format";
 import { useChartZoom } from "@/lib/bt/useChartZoom";
 import { ChartZoomBar } from "./ChartZoomReset";
@@ -39,11 +40,16 @@ export function EquityChart({
   result,
   benchmark,
   benchmarkLabel = "VOO",
+  currency,
+  benchmarkCurrency,
 }: {
   result: DcaResult;
   benchmark?: DcaResult | null;
   benchmarkLabel?: string;
+  currency: BacktestCcy;
+  benchmarkCurrency: BacktestCcy;
 }) {
+  const benchLineName = `${benchmarkLabel} 동일 DCA`;
   const data: Point[] = useMemo(() => {
     const benchByDate = new Map<string, number>();
     if (benchmark) {
@@ -92,8 +98,8 @@ export function EquityChart({
             <YAxis
               tick={{ fill: "#9aa3b2", fontSize: 11 }}
               stroke="#2c3445"
-              tickFormatter={(v) => fmtMoneyCompact(v)}
-              width={70}
+              tickFormatter={(v) => fmtMoneyCompact(v, currency)}
+              width={78}
               domain={["auto", "auto"]}
             />
             <Tooltip
@@ -104,7 +110,13 @@ export function EquityChart({
                 fontSize: 12,
               }}
               labelStyle={{ color: "#9aa3b2" }}
-              formatter={(value: number, name) => [fmtMoney(value), name]}
+              formatter={(value: number, name: string) => {
+                const ccy =
+                  benchmark && name === benchLineName
+                    ? benchmarkCurrency
+                    : currency;
+                return [fmtMoney(value, ccy), name];
+              }}
             />
             <Area
               type="monotone"
@@ -132,7 +144,7 @@ export function EquityChart({
                 stroke="#fbbf24"
                 strokeWidth={1.75}
                 dot={false}
-                name={`${benchmarkLabel} 동일 DCA`}
+                name={benchLineName}
                 isAnimationActive={false}
                 connectNulls
               />

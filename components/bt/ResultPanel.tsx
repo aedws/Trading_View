@@ -1,20 +1,22 @@
-import Link from "next/link";
-
 import type { DcaResult } from "@/lib/bt/backtest";
 import type { PerTickerOutcome } from "@/lib/bt/backtestApi";
 import type { CoveredCallDetection } from "@/lib/bt/coveredCall";
 import type { DividendAnalysis, ReinvestComparison } from "@/lib/bt/dividends";
-import { fmtMoney, fmtNumber, fmtPct, classNames } from "@/lib/bt/format";
+import {
+  type BacktestCcy,
+  fmtMoney,
+  fmtNumber,
+  fmtPct,
+  classNames,
+  tickerToBacktestCcy,
+} from "@/lib/bt/format";
 import type { SplitEvent } from "@/lib/bt/yahoo";
+import { tradingViewWebPath, toTradingViewSymbol } from "@/lib/tvSymbol";
 
 import { Card, CardBody, CardHeader } from "./Card";
 import { EquityChart } from "./EquityChart";
 import { Kpi } from "./Kpi";
 import { PriceChart } from "./PriceChart";
-import {
-  PromptExportButton,
-  type PromptExportSettings,
-} from "./PromptExportButton";
 import { PurchasesTable } from "./PurchasesTable";
 import { ReinvestCompareChart } from "./ReinvestCompareChart";
 import { WindowDistributionCard } from "./WindowDistributionCard";
@@ -22,31 +24,31 @@ import { WindowDistributionCard } from "./WindowDistributionCard";
 export function ResultPanel({
   outcome,
   benchmark,
-  benchmarkOutcome,
   benchmarkSymbol,
   refreshing,
   onToggleCoveredCall,
-  exportSettings,
 }: {
   outcome: PerTickerOutcome & { result: DcaResult };
   benchmark?: DcaResult | null;
-  /** Full benchmark outcome (used for AI-prompt export). */
-  benchmarkOutcome?: PerTickerOutcome | null;
   benchmarkSymbol?: string | null;
   refreshing?: boolean;
   onToggleCoveredCall?: (applied: boolean) => void;
-  /** When provided, renders an "AI 프롬프트 복사" button in the header. */
-  exportSettings?: PromptExportSettings;
 }) {
   const result = outcome.result;
   const s = result.summary;
+  const ccy = tickerToBacktestCcy(s.ticker);
   const profitTone = s.profit >= 0 ? "good" : "bad";
 
   const benchSymbol = benchmarkSymbol ?? benchmark?.summary.ticker ?? "VOO";
+  const benchCcy = benchmark ? tickerToBacktestCcy(benchmark.summary.ticker) : ccy;
   const benchDelta =
     benchmark && Number.isFinite(benchmark.summary.totalReturn)
       ? s.totalReturn - benchmark.summary.totalReturn
       : null;
+
+  const tvSymPath = encodeURIComponent(
+    tradingViewWebPath(toTradingViewSymbol(s.ticker)),
+  );
 
   return (
     <Card>
@@ -60,22 +62,14 @@ export function ResultPanel({
           </span>
         }
         right={
-          <div className="flex flex-wrap items-center gap-2">
-            {exportSettings ? (
-              <PromptExportButton
-                outcome={outcome}
-                benchmark={benchmarkOutcome}
-                benchmarkSymbol={benchmarkSymbol}
-                settings={exportSettings}
-              />
-            ) : null}
-            <Link
-              href={`/chart/${encodeURIComponent(s.ticker)}`}
-              className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-subtle px-2.5 py-1.5 text-[11px] font-medium text-ink-muted transition hover:border-accent hover:text-accent"
-            >
-              상세 차트 →
-            </Link>
-          </div>
+          <a
+            href={`https://www.tradingview.com/symbols/${tvSymPath}/`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-subtle px-2.5 py-1.5 text-[11px] font-medium text-ink-muted transition hover:border-accent hover:text-accent"
+          >
+            TradingView 차트 ↗
+          </a>
         }
       />
       <CardBody className="space-y-6">
@@ -90,12 +84,12 @@ export function ResultPanel({
         ) : null}
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <Kpi label="총 투자금" value={fmtMoney(s.totalInvested)} />
-          <Kpi label="최종 평가액" value={fmtMoney(s.finalValue)} />
+          <Kpi label="총 투자금" value={fmtMoney(s.totalInvested, ccy)} />
+          <Kpi label="최종 평가액" value={fmtMoney(s.finalValue, ccy)} />
           <Kpi
             label="총 수익률"
             value={fmtPct(s.totalReturn)}
-            delta={fmtMoney(s.profit)}
+            delta={fmtMoney(s.profit, ccy)}
             tone={profitTone}
           />
           <Kpi
@@ -113,8 +107,8 @@ export function ResultPanel({
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <Kpi label="평균 매수가" value={fmtMoney(s.avgCost)} tone="muted" />
-          <Kpi label="현재 주가" value={fmtMoney(s.lastPrice)} tone="muted" />
+          <Kpi label="평균 매수가" value={fmtMoney(s.avgCost, ccy)} tone="muted" />
+          <Kpi label="현재 주가" value={fmtMoney(s.lastPrice, ccy)} tone="muted" />
           <Kpi
             label="총 보유 주수"
             value={fmtNumber(s.totalShares, 4)}
@@ -123,7 +117,7 @@ export function ResultPanel({
           <Kpi
             label="일시 매수 시 수익률"
             value={fmtPct(s.buyHoldReturn)}
-            hint={`Final ${fmtMoney(s.buyHoldFinalValue)}`}
+            hint={`일시 매수(동일 기간) 최종 평가 ${fmtMoney(s.buyHoldFinalValue, ccy)}`}
             tone="muted"
           />
           <Kpi
@@ -139,6 +133,8 @@ export function ResultPanel({
             self={result}
             bench={benchmark}
             delta={benchDelta}
+            selfCcy={ccy}
+            benchCcy={benchCcy}
           />
         ) : null}
 
@@ -152,6 +148,7 @@ export function ResultPanel({
             analysis={outcome.dividendAnalysis}
             comparison={outcome.reinvestComparison}
             totalInvested={s.totalInvested}
+            currency={ccy}
           />
         ) : null}
 
@@ -162,6 +159,7 @@ export function ResultPanel({
           <ReinvestCompareChart
             ticker={s.ticker}
             comparison={outcome.reinvestComparison}
+            currency={ccy}
           />
         ) : null}
 
@@ -183,6 +181,8 @@ export function ResultPanel({
             result={result}
             benchmark={benchmark ?? null}
             benchmarkLabel={benchSymbol}
+            currency={ccy}
+            benchmarkCurrency={benchCcy}
           />
         </div>
 
@@ -195,10 +195,14 @@ export function ResultPanel({
               </span>
             ) : null}
           </div>
-          <PriceChart result={result} splits={outcome.splits} />
+          <PriceChart
+            result={result}
+            splits={outcome.splits}
+            currency={ccy}
+          />
         </div>
 
-        <PurchasesTable result={result} />
+        <PurchasesTable result={result} currency={ccy} />
       </CardBody>
     </Card>
   );
@@ -381,11 +385,13 @@ function DividendCard({
   analysis,
   comparison,
   totalInvested,
+  currency,
 }: {
   ticker: string;
   analysis: DividendAnalysis;
   comparison?: ReinvestComparison;
   totalInvested: number;
+  currency: BacktestCcy;
 }) {
   if (analysis.eventCount === 0) {
     return (
@@ -416,7 +422,7 @@ function DividendCard({
       <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
         <DivCell
           label="누적 분배금 수령"
-          value={fmtMoney(analysis.totalReceived)}
+          value={fmtMoney(analysis.totalReceived, currency)}
         />
         <DivCell
           label="현재 분배 수익률"
@@ -434,7 +440,7 @@ function DividendCard({
         />
         <DivCell
           label="분배금 (per share, 누적)"
-          value={fmtMoney(analysis.totalCash)}
+          value={fmtMoney(analysis.totalCash, currency)}
         />
       </div>
 
@@ -446,19 +452,20 @@ function DividendCard({
           <div className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
             <DivCell
               label="재투자 시 평가액"
-              value={fmtMoney(comparison.reinvest.finalValue)}
+              value={fmtMoney(comparison.reinvest.finalValue, currency)}
               hint={fmtPct(comparison.reinvest.totalReturn)}
             />
             <DivCell
               label="비재투자 시 평가액"
-              value={fmtMoney(comparison.noReinvest.finalValue)}
+              value={fmtMoney(comparison.noReinvest.finalValue, currency)}
               hint={`수익률 ${fmtPct(comparison.noReinvest.totalReturn)} · 현금 ${fmtMoney(
                 comparison.noReinvest.cashCollected,
+                currency,
               )}`}
             />
             <DivCell
               label="재투자 효과"
-              value={fmtMoney(comparison.reinvestLift)}
+              value={fmtMoney(comparison.reinvestLift, currency)}
               hint={
                 yieldDelta !== null
                   ? `${yieldDelta >= 0 ? "+" : ""}${fmtPct(yieldDelta)} 수익률 차이`
@@ -518,11 +525,15 @@ function BenchmarkBar({
   self,
   bench,
   delta,
+  selfCcy,
+  benchCcy,
 }: {
   symbol: string;
   self: DcaResult;
   bench: DcaResult;
   delta: number | null;
+  selfCcy: BacktestCcy;
+  benchCcy: BacktestCcy;
 }) {
   const beat = (delta ?? 0) >= 0;
   const tone = beat ? "text-accent-green" : "text-accent-red";
@@ -533,8 +544,14 @@ function BenchmarkBar({
         벤치마크 비교 — 같은 기간·같은 주기로 {symbol} DCA
       </div>
       <div className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
-        <BenchCell label={`${self.summary.ticker} 평가액`} value={fmtMoney(self.summary.finalValue)} />
-        <BenchCell label={`${symbol} 평가액`} value={fmtMoney(bench.summary.finalValue)} />
+        <BenchCell
+          label={`${self.summary.ticker} 평가액`}
+          value={fmtMoney(self.summary.finalValue, selfCcy)}
+        />
+        <BenchCell
+          label={`${symbol} 평가액`}
+          value={fmtMoney(bench.summary.finalValue, benchCcy)}
+        />
         <BenchCell
           label={`${self.summary.ticker} 수익률`}
           value={fmtPct(self.summary.totalReturn)}

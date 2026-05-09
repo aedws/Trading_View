@@ -1,5 +1,11 @@
 import type { DcaResult } from "@/lib/bt/backtest";
-import { classNames, fmtMoney, fmtMoneyCompact, fmtPct } from "@/lib/bt/format";
+import {
+  classNames,
+  fmtMoney,
+  fmtMoneyCompact,
+  fmtPct,
+  tickerToBacktestCcy,
+} from "@/lib/bt/format";
 
 export function CompareTable({ results }: { results: DcaResult[] }) {
   return (
@@ -21,6 +27,7 @@ export function CompareTable({ results }: { results: DcaResult[] }) {
         <tbody className="divide-y divide-border">
           {results.map((r) => {
             const s = r.summary;
+            const rowCcy = tickerToBacktestCcy(s.ticker);
             return (
               <tr key={r.ticker} className="hover:bg-bg-subtle/60">
                 <td className="px-3 py-2 font-semibold">{s.ticker}</td>
@@ -30,10 +37,10 @@ export function CompareTable({ results }: { results: DcaResult[] }) {
                 </td>
                 <td className="px-3 py-2 text-right">{s.nPurchases}</td>
                 <td className="px-3 py-2 text-right">
-                  {fmtMoneyCompact(s.totalInvested)}
+                  {fmtMoneyCompact(s.totalInvested, rowCcy)}
                 </td>
                 <td className="px-3 py-2 text-right">
-                  {fmtMoneyCompact(s.finalValue)}
+                  {fmtMoneyCompact(s.finalValue, rowCcy)}
                 </td>
                 <td
                   className={classNames(
@@ -57,7 +64,7 @@ export function CompareTable({ results }: { results: DcaResult[] }) {
                   {fmtPct(s.maxDrawdown)}
                 </td>
                 <td className="px-3 py-2 text-right">
-                  {fmtMoney(s.avgCost)}
+                  {fmtMoney(s.avgCost, rowCcy)}
                 </td>
               </tr>
             );

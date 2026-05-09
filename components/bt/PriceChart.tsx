@@ -14,7 +14,8 @@ import {
 } from "recharts";
 
 import type { DcaResult } from "@/lib/bt/backtest";
-import { fmtMoney } from "@/lib/bt/format";
+import type { BacktestCcy } from "@/lib/bt/format";
+import { fmtMoney, fmtMoneyCompact } from "@/lib/bt/format";
 import type { SplitEvent } from "@/lib/bt/yahoo";
 import { useChartZoom } from "@/lib/bt/useChartZoom";
 import { ChartZoomBar } from "./ChartZoomReset";
@@ -39,9 +40,11 @@ function downsample<T>(points: T[], maxPoints = 800): T[] {
 export function PriceChart({
   result,
   splits = [],
+  currency,
 }: {
   result: DcaResult;
   splits?: SplitEvent[];
+  currency: BacktestCcy;
 }) {
   const data = useMemo(() => {
     const buyByDate = new Map(result.purchases.map((p) => [p.date, p.price]));
@@ -100,8 +103,8 @@ export function PriceChart({
             <YAxis
               tick={{ fill: "#9aa3b2", fontSize: 11 }}
               stroke="#2c3445"
-              tickFormatter={(v) => `$${Number(v).toFixed(0)}`}
-              width={64}
+              tickFormatter={(v) => fmtMoneyCompact(Number(v), currency)}
+              width={72}
               domain={["auto", "auto"]}
             />
             <Tooltip
@@ -112,7 +115,10 @@ export function PriceChart({
                 fontSize: 12,
               }}
               labelStyle={{ color: "#9aa3b2" }}
-              formatter={(value: number, name) => [fmtMoney(value), name]}
+              formatter={(value: number, name) => [
+                fmtMoney(value, currency),
+                name,
+              ]}
             />
             <Line
               type="monotone"
@@ -134,7 +140,7 @@ export function PriceChart({
               stroke="#fbbf24"
               strokeDasharray="3 3"
               label={{
-                value: `Avg ${fmtMoney(result.summary.avgCost)}`,
+                value: `평균 ${fmtMoney(result.summary.avgCost, currency)}`,
                 fill: "#fbbf24",
                 fontSize: 11,
                 position: "insideTopLeft",

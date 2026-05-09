@@ -347,7 +347,7 @@ export function BacktestForm() {
             label="매수 단위"
             hint={
               unitMode === "amount"
-                ? "회차마다 정한 금액(USD)으로 매수합니다."
+                ? "회차마다 정한 금액으로 매수합니다. 금액 단위는 각 티커의 현지 통화(미국: 달러, 한국: 원)입니다."
                 : "회차마다 정한 주식 수만큼 매수합니다 (가격 변동에 따라 투자금이 달라집니다)."
             }
           >
@@ -369,7 +369,7 @@ export function BacktestForm() {
 
           {unitMode === "amount" ? (
             <Field
-              label="매수 금액 (USD, 티커당)"
+              label="매수 금액 (티커당 · 현지 통화)"
               hint="여러 티커 입력 시, 매 주기마다 각 티커에 동일하게 이 금액을 매수합니다."
             >
               <div className="relative">
@@ -571,22 +571,9 @@ export function BacktestForm() {
                 ? benchmarkResult
                 : null
             }
-            benchmarkOutcome={
-              benchmark && benchmark.ok && benchmark.ticker !== o.ticker
-                ? benchmark
-                : null
-            }
             benchmarkSymbol={benchmarkSymbol}
             refreshing={refreshing.has(o.ticker)}
             onToggleCoveredCall={(applied) => refetchTicker(o.ticker, applied)}
-            exportSettings={{
-              frequency,
-              unitMode,
-              amount: unitMode === "amount" ? amount : undefined,
-              shares: unitMode === "shares" ? shares : undefined,
-              fractional,
-              fractionalShares,
-            }}
           />
         ))}
       </section>
