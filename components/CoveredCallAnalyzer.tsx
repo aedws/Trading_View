@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from "react";
 
+import MarkdownBody from "@/components/MarkdownBody";
+
 type ReinvestMode =
   | "no_reinvest"
   | "self_reinvest"
@@ -265,9 +267,9 @@ export default function CoveredCallAnalyzer() {
 
           <section className="rounded-xl border border-border bg-bg-card p-4 space-y-2">
             <h3 className="text-sm font-medium text-gray-200">마크다운 리포트</h3>
-            <pre className="text-[11px] leading-relaxed overflow-x-auto p-3 rounded-lg bg-bg-soft border border-border-soft text-gray-300 whitespace-pre-wrap">
-              {data.markdownReport}
-            </pre>
+            <div className="rounded-lg border border-border-soft bg-bg-soft/50 p-3 overflow-x-auto">
+              <MarkdownBody markdown={data.markdownReport} />
+            </div>
           </section>
 
           <section className="rounded-xl border border-border bg-bg-card p-4 space-y-2">
