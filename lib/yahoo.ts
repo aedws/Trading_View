@@ -203,10 +203,15 @@ export async function searchTickers(query: string): Promise<
       isYahooFinance?: boolean;
     }>;
     return quotes
-      .filter((q) => q.isYahooFinance && q.symbol)
+      .filter(
+        (q) =>
+          q.isYahooFinance &&
+          typeof q.symbol === "string" &&
+          q.symbol.trim().length > 0
+      )
       .slice(0, 8)
       .map((q) => ({
-        symbol: q.symbol as string,
+        symbol: q.symbol!.trim(),
         name: q.longname ?? q.shortname ?? "",
         exchange: q.exchange,
         type: q.quoteType,

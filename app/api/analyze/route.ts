@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { fetchPriceSeries } from "@/lib/yahoo";
 import { analyze } from "@/lib/analyze";
 import type { RangeKey } from "@/lib/types";
+import { MAX_DURATION_ANALYZE } from "@/lib/vercelMaxDuration";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+/** Yahoo fetch + 전체 분석 연산 — Hobby 최대 60초까지 권장, Pro에서는 env로 더 올릴 수 있음. */
+export const maxDuration = MAX_DURATION_ANALYZE;
 
 const VALID_RANGES: RangeKey[] = ["1y", "2y", "3y", "5y", "10y", "max"];
 

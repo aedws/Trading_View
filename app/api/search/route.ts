@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchTickers } from "@/lib/yahoo";
+import { MAX_DURATION_SEARCH } from "@/lib/vercelMaxDuration";
 
 export const runtime = "nodejs";
-export const maxDuration = 10;
+export const maxDuration = MAX_DURATION_SEARCH;
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);

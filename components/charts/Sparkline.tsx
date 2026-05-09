@@ -46,8 +46,13 @@ export default function Sparkline({
     ...(band ? band.lower.filter((v) => isFinite(v)) : []),
     ...(overlays ?? []).flatMap((o) => o.values.filter((v) => isFinite(v))),
   ];
-  let lo = yMin ?? Math.min(...allValues);
-  let hi = yMax ?? Math.max(...allValues);
+  const finiteScale = allValues.filter((v) => Number.isFinite(v));
+  let lo = Number.isFinite(Number(yMin))
+    ? (yMin as number)
+    : Math.min(...finiteScale);
+  let hi = Number.isFinite(Number(yMax))
+    ? (yMax as number)
+    : Math.max(...finiteScale);
   if (zeroLine !== undefined) {
     lo = Math.min(lo, zeroLine);
     hi = Math.max(hi, zeroLine);

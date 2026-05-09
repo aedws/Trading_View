@@ -74,6 +74,19 @@ npm run build
 npm start
 ```
 
+## Vercel 배포 — API `maxDuration` (함수 시간 제한)
+
+각 `app/api/**/route.ts`의 `maxDuration`(초)은 `lib/vercelMaxDuration.ts`에서 읽으며, 플랜·부하에 맞게 Vercel 대시보드 환경 변수로 덮어쓸 수 있습니다.
+
+| 변수 | 기본값 | 해당 라우트 |
+|------|--------|-------------|
+| `VERCEL_MAX_DURATION_ANALYZE` | 60 | `GET /api/analyze` |
+| `VERCEL_MAX_DURATION_PRICES` | 30 | `GET /api/prices` |
+| `VERCEL_MAX_DURATION_MARKET` | 30 | `GET /api/market` |
+| `VERCEL_MAX_DURATION_SEARCH` | 10 | `GET /api/search` |
+
+플랜별로 Vercel이 허용하는 상한보다 크게 두면 플랫폼에서 잘립니다. (대략: Hobby 최대 약 60초·Pro 최대 수백 초 — [Limits](https://vercel.com/docs/limits) 문서 참고.)
+
 ## 폴더 구조
 
 ```
@@ -85,6 +98,7 @@ npm start
     api/
       prices/route.ts              # GET /api/prices
       analyze/route.ts             # GET /api/analyze (모든 지표 한 번에)
+      market/route.ts              # GET /api/market (상단 마켓 스트립)
       search/route.ts              # GET /api/search (티커 자동완성)
   components/
     Header.tsx
@@ -113,6 +127,7 @@ npm start
     types.ts
     yahoo.ts                       # 가격/검색 fetch 래퍼
     analyze.ts                     # 모든 지표 계산 → AnalysisReport
+    vercelMaxDuration.ts           # Vercel maxDuration 기본값 + env 오버라이드
     format.ts                      # 가격·% 포맷 헬퍼
     math/
       stats.ts                     # mean / std / quantile / skew / kurt / log-returns

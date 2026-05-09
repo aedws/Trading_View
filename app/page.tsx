@@ -8,6 +8,11 @@ import MarketTickerStrip from "@/components/MarketTickerStrip";
 import type { AnalysisReport } from "@/lib/analyze";
 import type { RangeKey } from "@/lib/types";
 
+/** Yahoo 심볼 정규화 — `undefined.trim` 방지, 공백 제거, 대문자화(.KS 보존). */
+function normalizeTicker(raw: string): string {
+  return raw.replace(/\s+/g, "").toUpperCase();
+}
+
 export default function HomePage() {
   const [ticker, setTicker] = useState("AAPL");
   const [range, setRange] = useState<RangeKey>("5y");
@@ -51,7 +56,11 @@ export default function HomePage() {
       <Header
         ticker={ticker}
         range={range}
-        onTicker={(t) => setTicker(t.trim().toUpperCase())}
+        onTicker={(t) => {
+          const raw = String(t ?? "").trim();
+          if (!raw) return;
+          setTicker(normalizeTicker(raw));
+        }}
         onRange={(r) => setRange(r)}
         loading={loading}
       />

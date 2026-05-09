@@ -12,9 +12,18 @@ export default function WaveletCard({ report }: { report: AnalysisReport }) {
     value: w.energies[i] ?? 0,
     color: i < 2 ? "#ef4444" : i < 4 ? "#eab308" : "#22c55e",
   }));
-  // dominant scale
-  const maxIdx = w.energies.indexOf(Math.max(...w.energies));
-  const dom = w.bands[maxIdx];
+  // dominant scale (ignore NaN — Math.max spreads with NaN corrupt the result)
+  let maxIdx = -1;
+  let maxVal = -Infinity;
+  for (let i = 0; i < w.energies.length; i++) {
+    const v = w.energies[i];
+    if (!Number.isFinite(v)) continue;
+    if (v > maxVal) {
+      maxVal = v;
+      maxIdx = i;
+    }
+  }
+  const dom = maxIdx >= 0 ? w.bands[maxIdx] : undefined;
 
   const text = !dom
     ? "데이터가 부족합니다."

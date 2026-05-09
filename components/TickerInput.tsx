@@ -55,9 +55,11 @@ export default function TickerInput({
   }
 
   function pick(s: Suggestion) {
-    setValue(s.symbol);
+    const sym = (s.symbol ?? "").trim();
+    if (!sym) return;
+    setValue(sym);
     setOpen(false);
-    onSubmit(s.symbol);
+    onSubmit(sym);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -70,10 +72,12 @@ export default function TickerInput({
       }
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
+      if (suggestions.length === 0) return;
       setOpen(true);
       setHighlight((h) => Math.min(h + 1, suggestions.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      if (suggestions.length === 0) return;
       setHighlight((h) => Math.max(0, h - 1));
     } else if (e.key === "Escape") {
       setOpen(false);

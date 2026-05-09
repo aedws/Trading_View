@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchPriceSeries } from "@/lib/yahoo";
 import type { RangeKey } from "@/lib/types";
+import { MAX_DURATION_PRICES } from "@/lib/vercelMaxDuration";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = MAX_DURATION_PRICES;
 
 const VALID_RANGES: RangeKey[] = ["1y", "2y", "3y", "5y", "10y", "max"];
 

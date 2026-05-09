@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { fetchMarketQuotes } from "@/lib/yahoo";
+import { MAX_DURATION_MARKET } from "@/lib/vercelMaxDuration";
 
 export const runtime = "nodejs";
-export const maxDuration = 20;
+/** 다종목 병렬 차트 호출 — 필요 시 env로 상한 조정. */
+export const maxDuration = MAX_DURATION_MARKET;
 
 const MARKET_SYMBOLS: Array<{ symbol: string; label: string }> = [
   { symbol: "^IXIC", label: "나스닥" },
