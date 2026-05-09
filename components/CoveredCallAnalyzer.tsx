@@ -95,7 +95,7 @@ export default function CoveredCallAnalyzer() {
       <section className="rounded-xl border border-border bg-bg-card p-4 space-y-4">
         <h2 className="text-base font-medium text-gray-100">분석 입력</h2>
         <p className="text-[12px] text-gray-500 leading-relaxed">
-          야후 파이낸스 일봉·분배·분할을 사용합니다. 재투자 3종과 VOO 벤치마크는 서버에서 함께
+          야후 파이낸스 일봉·분배·분할을 사용합니다. 재투자 3종과 선택한 벤치마크는 서버에서 함께
           계산됩니다.
         </p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
@@ -167,10 +167,14 @@ export default function CoveredCallAnalyzer() {
           </label>
           <label className="space-y-1">
             <span className="text-gray-500 text-[11px]">벤치마크</span>
-            <input
+            <TickerAutocomplete
+              mode="single"
               value={bench}
-              onChange={(e) => setBench(e.target.value.replace(/\s+/g, "").toUpperCase())}
-              className="w-full rounded-lg bg-bg-soft border border-border px-2 py-1.5 font-mono text-gray-100"
+              onChange={(v) => setBench(v.replace(/\s+/g, "").toUpperCase())}
+              placeholder="예: VOO, SPY"
+              inputId="cc-benchmark"
+              className="w-full"
+              inputClassName="w-full rounded-lg bg-bg-soft border border-border px-2 py-1.5 font-mono text-gray-100 uppercase"
             />
           </label>
         </div>
