@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { toTradingViewSymbol, tradingViewWebPath } from "@/lib/tvSymbol";
+
+export { toTradingViewSymbol, tradingViewWebPath };
 
 type Props = {
   /**
@@ -16,27 +19,6 @@ type Props = {
   symbol: string;
   height?: number;
 };
-
-export function toTradingViewSymbol(s: string): string {
-  const t = s.trim().toUpperCase();
-  if (!t) return "NASDAQ:AAPL";
-  if (t.includes(":")) return t;
-  if (t.endsWith(".KS")) return `KRX:${t.replace(".KS", "")}`;
-  if (t.endsWith(".KQ")) return `KOSDAQ:${t.replace(".KQ", "")}`;
-  if (t.endsWith(".T")) return `TSE:${t.replace(".T", "")}`;
-  if (t.endsWith(".HK")) return `HKEX:${t.replace(".HK", "")}`;
-  if (t.endsWith(".L")) return `LSE:${t.replace(".L", "")}`;
-  if (t === "BTC" || t === "BTC-USD") return "BINANCE:BTCUSDT";
-  if (t === "ETH" || t === "ETH-USD") return "BINANCE:ETHUSDT";
-  if (t.endsWith("=F")) return `CME:${t.replace("=F", "1!")}`;
-  // default: assume US listing — TradingView handles unprefixed US symbols too
-  return t;
-}
-
-/** TV 웹 URL은 보통 `EXCHANGE-TICKER`(하이픈) 경로를 씁니다. */
-export function tradingViewWebPath(tvSymbol: string): string {
-  return tvSymbol.replace(/^(.+):(.+)$/, "$1-$2");
-}
 
 export default function TradingViewEmbed({ symbol, height = 760 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -87,7 +69,7 @@ export default function TradingViewEmbed({ symbol, height = 760 }: Props) {
         enable_publishing: false,
         withdateranges: true,
         hide_side_toolbar: false,
-        allow_symbol_change: true,
+        allow_symbol_change: false,
         details: true,
         hotlist: false,
         calendar: false,
