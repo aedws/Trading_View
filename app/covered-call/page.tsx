@@ -1,11 +1,12 @@
 import Link from "next/link";
 
+import CoveredCallAnalyzer from "@/components/CoveredCallAnalyzer";
 import MainNav from "@/components/MainNav";
 
 export const metadata = {
   title: "커버드콜 분석 — 시장분석기",
   description:
-    "yfinance 단일 자산 DCA·IRR·MDD·재투자 시나리오·등급·마크다운/AI 프롬프트 (Python CLI)",
+    "야후 DCA·IRR·MDD·VOO 벤치·3종 재투자·원칙 기반 등급. 로컬 Python covered_call_dca/ 도 병행 가능.",
 };
 
 export default function CoveredCallPage() {
@@ -21,7 +22,7 @@ export default function CoveredCallPage() {
           </Link>
           <MainNav />
           <div className="sm:ml-auto text-[11px] text-gray-500">
-            Python 도구 경로 · <span className="font-mono">covered_call_dca/</span>
+            야후 파이낸스 · 서버 /api/covered-call
           </div>
         </div>
       </header>
@@ -30,31 +31,21 @@ export default function CoveredCallPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">커버드콜 분석</h1>
           <p className="mt-1 text-sm text-gray-400 max-w-3xl leading-relaxed">
-            DCA 시뮬레이션, IRR/XIRR, MDD, lump-sum 및 VOO 벤치마크 비교, 분배 주기 추정,
-            Sliding-window 분포, 재투자 3종, 등급(블랙리스트·룰), 마크다운 리포트·AI
-            프롬프트는 저장소 루트의{" "}
-            <code className="text-gray-200 font-mono text-[13px]">covered_call_dca/</code>{" "}
-            패키지에서 실행합니다. 웹 UI 연동은 추후 확장합니다.
+            단일 티커에 대해 기간·적립·재투자 가정을 넣으면, 야후 일봉(분배·분할)로 DCA
+            백테스트·XIRR·MDD·슬라이딩 분포·VOO 비교·증류( QQQI/SPYI ) 시나리오를 한 번에
+            계산합니다. 등급과 원칙 체크는 메커니즘·변동성·갭·분배율 등 프록시 기반입니다.
           </p>
         </div>
 
-        <section className="rounded-xl border border-border bg-bg-card p-4 space-y-3 text-sm text-gray-300">
-          <h2 className="text-base font-medium text-gray-100">실행 예시</h2>
-          <pre className="text-[12px] leading-relaxed overflow-x-auto p-3 rounded-lg bg-bg-soft border border-border-soft text-gray-200">
+        <CoveredCallAnalyzer />
+
+        <section className="rounded-xl border border-border bg-bg-card p-4 text-[12px] text-gray-500 space-y-2">
+          <p className="font-medium text-gray-400">CLI (로컬 검증·레퍼런스)</p>
+          <pre className="text-[11px] leading-relaxed overflow-x-auto p-3 rounded-lg bg-bg-soft border border-border-soft text-gray-300">
             {`cd covered_call_dca
 pip install -r requirements.txt
-python main.py --ticker QDTE --start 2024-03-07 --end 2026-05-04 \\
-  --output report.md --mode both
-# 레퍼런스 케이스 (NVII·QDTE·GDXY·XOMO ±5%) 자동 검증
 python validation_benchmarks.py`}
           </pre>
-          <p className="text-[12px] text-gray-500">
-            옵션: <span className="font-mono">--amount</span>,{" "}
-            <span className="font-mono">--freq</span> (예: W-FRI),{" "}
-            <span className="font-mono">--reinvest</span> no_reinvest | self_reinvest |
-            distill_qqqi70_spyi30, <span className="font-mono">--mode</span> report |
-            ai_prompt | both, <span className="font-mono">--no-benchmark</span>
-          </p>
         </section>
 
         <footer className="pt-10 pb-16 border-t border-border text-[11px] text-gray-500 leading-relaxed">

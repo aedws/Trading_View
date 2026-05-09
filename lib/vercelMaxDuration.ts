@@ -12,6 +12,7 @@
  * - VERCEL_MAX_DURATION_MARKET (default 30) — /api/market
  * - VERCEL_MAX_DURATION_SEARCH (default 10) — /api/search
  * - VERCEL_MAX_DURATION_BACKTEST (default 60) — /api/backtest
+ * - VERCEL_MAX_DURATION_COVERED_CALL (default 60) — /api/covered-call
  *
  * Values above the account plan maximum are clamped by Vercel at runtime.
  */
@@ -42,5 +43,11 @@ export const MAX_DURATION_SEARCH = envSeconds(
 
 export const MAX_DURATION_BACKTEST = envSeconds(
   "VERCEL_MAX_DURATION_BACKTEST",
+  60
+);
+
+/** 커버드콜 웹 분석 — 다중 야후 호출 */
+export const MAX_DURATION_COVERED_CALL = envSeconds(
+  "VERCEL_MAX_DURATION_COVERED_CALL",
   60
 );
