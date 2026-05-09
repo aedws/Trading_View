@@ -280,7 +280,7 @@ export default function CoveredCallAnalyzer() {
           <section className="rounded-xl border border-border bg-bg-card p-4 space-y-2">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-sm font-medium text-gray-200">
-                AI 프롬프트 (19사이클·포트폴리오 템플릿)
+                AI 프롬프트 (포트폴리오 템플릿)
               </h3>
               <button
                 type="button"

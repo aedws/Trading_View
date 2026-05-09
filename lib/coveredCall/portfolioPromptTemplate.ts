@@ -1,5 +1,5 @@
 /**
- * LLM용 포트폴리오·19사이클 분석 요청 템플릿.
+ * LLM용 포트폴리오 분석 요청 템플릿.
  * 플레이스홀더는 `fillPortfolioPromptTemplate`에서 치환합니다.
  */
 export const PORTFOLIO_PROMPT_TEMPLATE = `
@@ -7,7 +7,7 @@ export const PORTFOLIO_PROMPT_TEMPLATE = `
 
 ---
 
-## 포트폴리오 19사이클 프레임 분석 요청
+## 포트폴리오 프레임 분석 요청
 
 ### 정량 분석 (백테스터 보완)
 
