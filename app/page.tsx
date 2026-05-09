@@ -111,7 +111,13 @@ export default function HomePage() {
       />
 
       <div className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
-        <MarketTickerStrip />
+        <MarketTickerStrip
+          selectedSymbol={ticker}
+          onSelectSymbol={(yahooSymbol) => {
+            const n = normalizeTicker(yahooSymbol);
+            if (n) setTicker(n);
+          }}
+        />
 
         {!bootstrapped ? (
           <ChartSkeleton height={CHART_H} />
