@@ -125,10 +125,13 @@ export default function HomePage() {
         ) : useYahooChart ? (
           <>
             <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-50/95 leading-snug">
-              한국 거래소(<span className="font-mono">.KS</span>,{" "}
-              <span className="font-mono">.KQ</span>)와 FX 중{" "}
-              <span className="font-mono">KRW=X</span>(원/달)을 제외한{" "}
-              <span className="font-mono">⋯=X</span> 심볼 등은 TradingView 무료 임베드에서
+              상단 마켓 스트립 지수·선물(
+              <span className="font-mono">^GSPC</span>,{" "}
+              <span className="font-mono">^IXIC</span>
+              등, <span className="font-mono">KRW=X</span>
+              제외)·한국 거래소(<span className="font-mono">.KS</span>,{" "}
+              <span className="font-mono">.KQ</span>)·FX 중 원/달을 제외한{" "}
+              <span className="font-mono">⋯=X</span> 등은 TradingView 무료 임베드에서
               차트가 막히거나 알림만 뜨는 경우가 많습니다. 메인 차트는{" "}
               <strong className="font-medium">
                 야후 15분 봉(최근 약 59일 한도 · 무료 지연 가능)

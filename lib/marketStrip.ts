@@ -15,3 +15,13 @@ export const MARKET_STRIP_ITEMS: Array<{ symbol: string; label: string }> = [
   { symbol: "DX-Y.NYB", label: "달러 인덱스" },
   { symbol: "KRW=X", label: "달러 환율" },
 ];
+
+/**
+ * 스트립 종목 중 TV 무료 임베드 대신 야후 차트를 쓸 야후 심볼.
+ * `KRW=X`만 TV 임베드 유지 (`lib/tvEmbedPolicy`).
+ */
+export const MARKET_STRIP_USE_YAHOO_CHART_SYMBOLS = new Set(
+  MARKET_STRIP_ITEMS.filter(
+    (i) => i.symbol.trim().toUpperCase() !== "KRW=X"
+  ).map((i) => i.symbol.trim().toUpperCase())
+);
