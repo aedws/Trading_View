@@ -68,8 +68,9 @@ export default function HomePage() {
       setLoading(true);
       setError(null);
       try {
+        const intra = shouldUseYahooCloseChart(t) ? "&intraday15m=1" : "";
         const res = await fetch(
-          `/api/analyze?ticker=${encodeURIComponent(t)}&range=${r}`,
+          `/api/analyze?ticker=${encodeURIComponent(t)}&range=${encodeURIComponent(r)}${intra}`,
           { cache: "no-store" }
         );
         const data = await res.json();
@@ -124,11 +125,17 @@ export default function HomePage() {
         ) : useYahooChart ? (
           <>
             <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-50/95 leading-snug">
-              한국 거래소 상장 종목(<span className="font-mono">.KS</span>,{" "}
-              <span className="font-mono">.KQ</span>)은 TradingView 무료 임베드에서
-              차트가 막히거나 알림만 뜨는 경우가 많습니다. 여기서는{" "}
-              <strong className="font-medium">야후 일봉 종가</strong>로 같은 기간 추세를
-              그립니다. TV 고급차트는 링크로 열어보세요.
+              한국 거래소(<span className="font-mono">.KS</span>,{" "}
+              <span className="font-mono">.KQ</span>)와 FX 중{" "}
+              <span className="font-mono">KRW=X</span>(원/달)을 제외한{" "}
+              <span className="font-mono">⋯=X</span> 심볼 등은 TradingView 무료 임베드에서
+              차트가 막히거나 알림만 뜨는 경우가 많습니다. 메인 차트는{" "}
+              <strong className="font-medium">
+                야후 15분 봉(최근 약 59일 한도 · 무료 지연 가능)
+              </strong>
+              을 우선 표시하고, 없으면 일봉 종가로 대체합니다. 아래 카드 지표는 선택한 구간의{" "}
+              <strong className="font-medium">일봉</strong> 데이터를 그대로 씁니다. TV는
+              링크에서 확인하세요.
             </div>
             {loading && !report ? (
               <ChartSkeleton height={CHART_H} />
@@ -138,10 +145,14 @@ export default function HomePage() {
                 ticker={ticker}
                 longName={report.meta.longName}
                 currency={report.meta.currency}
-                points={report.pricesForChart.map((p) => ({
-                  date: p.date,
-                  close: p.close,
-                }))}
+                granularity={report.yahooIntradayChart ? "15m" : "1d"}
+                points={
+                  report.yahooIntradayChart?.points ??
+                  report.pricesForChart.map((p) => ({
+                    date: p.date,
+                    close: p.close,
+                  }))
+                }
                 height={CHART_H}
               />
             ) : error ? (

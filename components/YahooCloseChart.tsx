@@ -1,6 +1,6 @@
 "use client";
 
-import { fmtDate, fmtPrice } from "@/lib/format";
+import { fmtChartIntradayAxis, fmtDate, fmtPrice } from "@/lib/format";
 import { toTradingViewSymbol, tradingViewWebPath } from "@/lib/tvSymbol";
 
 type Point = { date: string; close: number };
@@ -9,6 +9,8 @@ type Props = {
   ticker: string;
   longName?: string;
   currency: string;
+  /** 15m: 야후 분봉(상단 차트만). 분석 카드 데이터와 다를 수 있음 */
+  granularity: "1d" | "15m";
   points: Point[];
   height: number;
 };
@@ -24,6 +26,7 @@ export default function YahooCloseChart({
   ticker,
   longName,
   currency,
+  granularity,
   points,
   height,
 }: Props) {
@@ -106,6 +109,11 @@ export default function YahooCloseChart({
     tradingViewWebPath(tvSym)
   )}/`;
 
+  const fmtX = (d: string) =>
+    granularity === "15m" ? fmtChartIntradayAxis(d) : fmtDate(d);
+  const ariaChart =
+    granularity === "15m" ? `${ticker} 15분 봉 차트` : `${ticker} 일봉 종가 차트`;
+
   return (
     <div className="rounded-xl overflow-hidden border border-border bg-bg-card shrink-0">
       <div className="px-4 pt-3 pb-1 border-b border-border-soft flex flex-wrap items-baseline gap-x-4 gap-y-1 min-h-[2.75rem]">
@@ -146,7 +154,7 @@ export default function YahooCloseChart({
             viewBox={`0 0 ${VB_W} ${VB_H}`}
             className="w-full h-full block"
             preserveAspectRatio="none"
-            aria-label={`${ticker} 종가 차트`}
+            aria-label={ariaChart}
           >
             <rect x={0} y={0} width={VB_W} height={VB_H} fill="#0f1419" />
 
@@ -195,10 +203,10 @@ export default function YahooCloseChart({
                 x={PL}
                 y={VB_H - 14}
                 fill="#6b7280"
-                fontSize={11}
+                fontSize={granularity === "15m" ? 10 : 11}
                 className="num"
               >
-                {fmtDate(first.date)}
+                {fmtX(first.date)}
               </text>
             )}
             {valid[Math.floor(valid.length / 2)] && (
@@ -207,10 +215,10 @@ export default function YahooCloseChart({
                 y={VB_H - 14}
                 textAnchor="middle"
                 fill="#6b7280"
-                fontSize={11}
+                fontSize={granularity === "15m" ? 10 : 11}
                 className="num"
               >
-                {fmtDate(valid[Math.floor(valid.length / 2)].date)}
+                {fmtX(valid[Math.floor(valid.length / 2)].date)}
               </text>
             )}
             {last && (
@@ -219,10 +227,10 @@ export default function YahooCloseChart({
                 y={VB_H - 14}
                 textAnchor="end"
                 fill="#6b7280"
-                fontSize={11}
+                fontSize={granularity === "15m" ? 10 : 11}
                 className="num"
               >
-                {fmtDate(last.date)}
+                {fmtX(last.date)}
               </text>
             )}
 
@@ -240,9 +248,21 @@ export default function YahooCloseChart({
 
       <div className="px-3 py-2 text-[10px] text-gray-500 border-t border-border-soft flex items-center justify-between gap-2 flex-wrap">
         <span>
-          <span className="text-gray-400">야후 일봉 종가</span>
+          <span className="text-gray-400">
+            {granularity === "15m"
+              ? "야후 15분 봉(최근 구간)"
+              : "야후 일봉 종가"}
+          </span>
           <span className="text-gray-600 mx-1">·</span>
-          TradingView 임베드는 KRX 등에서 제한될 수 있어 이 구간은 대체 차트입니다.
+          {granularity === "15m" ? (
+            <>
+              무료 데이터는 지연·누락 가능(거래소·종목별). 카드 지표는 일봉 기준입니다.
+            </>
+          ) : (
+            <>
+              TradingView 임베드는 KRX 등에서 제한될 수 있어 이 구간은 대체 차트입니다.
+            </>
+          )}
         </span>
         <a
           href={tvUrl}

@@ -27,6 +27,13 @@ function formatDate(d: Date): string {
 
 const MS_PER_DAY = 86_400_000;
 
+/** Yahoo chart 15m 요청 시 실질적 보관 한도에 맞춘 상한 — 분석 일봉 기간과 별개 */
+const INTRADAY_15M_MAX_DAYS = 59;
+
+export type Intraday15mChartPayload = {
+  points: Array<{ date: string; close: number }>;
+};
+
 export type MarketQuote = {
   symbol: string;
   label: string;
@@ -102,6 +109,51 @@ export async function fetchPriceSeries(
     exchange: meta?.exchangeName,
     bars,
   };
+}
+
+/**
+ * 상단 대체 차트 전용: 야후 15분 봉(무료 구간은 거래소·종목에 따라 지연·누락 가능).
+ * 일봉 분석(`fetchPriceSeries`)과 독립입니다.
+ */
+export async function fetchIntraday15mForChart(
+  ticker: string,
+  range: RangeKey
+): Promise<Intraday15mChartPayload | null> {
+  const sym = ticker.trim().toUpperCase();
+  if (!sym) return null;
+
+  const rangeDays = RANGE_TO_DAYS[range];
+  const days = Math.min(rangeDays, INTRADAY_15M_MAX_DAYS);
+  if (days < 1) return null;
+
+  const period2 = new Date();
+  const period1 = new Date(period2.getTime() - days * MS_PER_DAY);
+
+  try {
+    const chart = await yahooFinance.chart(sym, {
+      period1,
+      period2,
+      interval: "15m",
+      includePrePost: false,
+    });
+
+    const quotes = chart.quotes ?? [];
+    const points: Array<{ date: string; close: number }> = [];
+    for (const q of quotes) {
+      if (q?.date == null || q.close == null) continue;
+      const c = q.close as number;
+      if (!Number.isFinite(c)) continue;
+      const raw = q.date as Date | string | number;
+      const d = raw instanceof Date ? raw : new Date(raw);
+      if (Number.isNaN(d.getTime())) continue;
+      points.push({ date: d.toISOString(), close: c });
+    }
+
+    if (points.length < 16) return null;
+    return { points };
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchMarketQuotes(

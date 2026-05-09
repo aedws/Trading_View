@@ -16,7 +16,27 @@ export function fmtNum(x: unknown, digits = 2): string {
 
 export function fmtDate(d: string): string {
   if (!d || typeof d !== "string" || d.length < 2) return "—";
-  return d.slice(2).replace(/-/g, ".");
+  const day = d.includes("T") ? d.slice(0, 10) : d;
+  return day.slice(2).replace(/-/g, ".");
+}
+
+/** Yahoo 15분봉 등 ISO 시각 문자열용 — 서울 기준 날짜·시각 */
+export function fmtChartIntradayAxis(iso: string): string {
+  if (!iso || typeof iso !== "string") return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return fmtDate(iso);
+  try {
+    return new Intl.DateTimeFormat("ko-KR", {
+      timeZone: "Asia/Seoul",
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(d);
+  } catch {
+    return fmtDate(iso);
+  }
 }
 
 export function fmtPrice(x: unknown, currency: string): string {

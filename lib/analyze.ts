@@ -20,6 +20,12 @@ import { powerSpectrum } from "./math/fft";
 import { analyticSignal } from "./math/hilbert";
 import { haarMulti, haarBandLabels } from "./math/wavelet";
 
+/** `/api/analyze`에서 선택적으로 덧붙임 — 차트만 15m, 본문 분석은 일봉 유지 */
+export type YahooIntradayChart15m = {
+  interval: "15m";
+  points: { date: string; close: number }[];
+};
+
 export type AnalysisReport = {
   meta: {
     ticker: string;
@@ -102,6 +108,8 @@ export type AnalysisReport = {
     bands: string[];
     energies: number[];
   };
+  /** 야후 대체 차트용(옵션). 없으면 일봉 `pricesForChart`로만 그림 */
+  yahooIntradayChart?: YahooIntradayChart15m;
 };
 
 const TRADING_DAYS = 252;
