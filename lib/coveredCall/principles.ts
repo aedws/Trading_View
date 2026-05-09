@@ -11,7 +11,7 @@ export type PrincipleHit = {
 
 const TITLES: Record<number, string> = {
   1: "안 움직이면 죽는다 — IV 부족 시 분배 엔진 위험",
-  2: "갭 자산은 카테고리 D 리스크",
+  2: "갭·하방 — 벤치(VOO 등) 대비 초과 하락",
   3: "표면 유사성에 속지 말 것 — 변동성 패턴이 IRR 결정",
   4: "분배율과 IRR은 무상관·음의 상관 가능",
   6: "복리 vs 단순 누적 격차",
@@ -20,11 +20,20 @@ const TITLES: Record<number, string> = {
   17: "VOO 벤치 부진 = 구조적 약점 신호",
 };
 
+export type DownsideVsBenchInput = {
+  distress: boolean;
+  medianExcessWhenAssetDown: number;
+  severeExcessDownShare: number;
+  excessDownVsBenchShare: number;
+  benchLabel: string;
+  tradingIntervals: number;
+};
+
 export function evaluatePrinciples(input: {
   irr: number;
   realizedVol: number;
   trailingYield: number | null;
-  gapBothWay: boolean;
+  downsideVsBench: DownsideVsBenchInput;
   dcaIrr: number;
   lumpIrr: number;
   vooIrr: number;
@@ -46,13 +55,28 @@ export function evaluatePrinciples(input: {
       : "실현변동성·IRR 조합상 분배 엔진 ‘정지’ 패턴은 현재 데이터에서 두드러지지 않음.",
   });
 
+  const dvb = input.downsideVsBench;
+  const bench = dvb.benchLabel || "벤치";
+  const medStr = Number.isFinite(dvb.medianExcessWhenAssetDown)
+    ? `${(dvb.medianExcessWhenAssetDown * 100).toFixed(2)}%p`
+    : "—";
+  const sevStr = Number.isFinite(dvb.severeExcessDownShare)
+    ? `${(dvb.severeExcessDownShare * 100).toFixed(1)}%`
+    : "—";
+  const exStr = Number.isFinite(dvb.excessDownVsBenchShare)
+    ? `${(dvb.excessDownVsBenchShare * 100).toFixed(1)}%`
+    : "—";
+
   out.push({
     id: 2,
     title: TITLES[2],
-    verdict: input.gapBothWay ? "warn" : "neutral",
-    note: input.gapBothWay
-      ? "±2% 이상 일간 변동이 양방향으로 잦아 갭·급변 패널티 후보."
-      : "극단 갭 빈도는 보통 수준으로 보임(종가 기준 근사).",
+    verdict: dvb.distress ? "warn" : "neutral",
+    note: dvb.distress
+      ? `일간 종가 기준: 자산 하락일의 벤치(${bench}) 대비 초과수익률(자산−벤치) 중앙값 ${medStr}, ` +
+          `하락일 중 벤치보다 더 나쁜 날 비율 ${exStr}, ` +
+          `초과하락(자산 대비 벤치 −1%p 이상 열위) 비율 ${sevStr} — 구조적 하방·갭 패널티 후보.`
+      : `일간 종가 기준 하방: 벤치(${bench}) 대비 초과하락 중앙값 ${medStr}, ` +
+          `벤치 대비 열위 일 비율 ${exStr}, 심각 초과하락 비율 ${sevStr} (거래간격 ${dvb.tradingIntervals}일).`,
   });
 
   const irrVolNote =

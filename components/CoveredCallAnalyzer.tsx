@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 
 import MarkdownBody from "@/components/MarkdownBody";
+import { TickerAutocomplete } from "@/components/bt/TickerAutocomplete";
 
 type ReinvestMode =
   | "no_reinvest"
@@ -100,10 +101,14 @@ export default function CoveredCallAnalyzer() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
           <label className="space-y-1">
             <span className="text-gray-500 text-[11px]">티커</span>
-            <input
+            <TickerAutocomplete
+              mode="single"
               value={ticker}
-              onChange={(e) => setTicker(e.target.value.replace(/\s+/g, "").toUpperCase())}
-              className="w-full rounded-lg bg-bg-soft border border-border px-2 py-1.5 font-mono text-gray-100"
+              onChange={(v) => setTicker(v.replace(/\s+/g, "").toUpperCase())}
+              placeholder="예: QDTE, JEPI"
+              inputId="cc-ticker"
+              className="w-full"
+              inputClassName="w-full rounded-lg bg-bg-soft border border-border px-2 py-1.5 font-mono text-gray-100 uppercase"
             />
           </label>
           <label className="space-y-1">

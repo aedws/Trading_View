@@ -12,10 +12,11 @@ import {
   reinvestLabel,
 } from "./gradingCc";
 import {
+  alignCloseByDate,
   cagrFromWealth,
   dividendIntervals,
+  downsideVsBenchStats,
   maxDrawdown,
-  overnightGapStats,
   percentile,
   realizedVolAnnual,
   slidingWindowReturns,
@@ -28,6 +29,7 @@ import {
 import {
   enrichQuoteContext,
   evaluatePrinciples,
+  type DownsideVsBenchInput,
   type PrincipleHit,
 } from "./principles";
 import { buildDcaDates } from "./schedule";
@@ -279,7 +281,12 @@ export async function runCoveredCallAnalysis(params: {
 
   const closes = bars.map((b) => b.close);
   const rv = realizedVolAnnual(closes);
-  const gaps = overnightGapStats(closes);
+  const aligned = alignCloseByDate(bars, vooBars);
+  const downsideVsBench = downsideVsBenchStats(
+    aligned.asset,
+    aligned.bench,
+    bench,
+  );
   const trailingYield = qs?.dividendYield ?? null;
 
   const years =
@@ -301,7 +308,7 @@ export async function runCoveredCallAnalysis(params: {
     irr: primary.irr,
     realizedVol: rv,
     trailingYield,
-    gapBothWay: gaps.bothWayPenalty,
+    downsideVsBench,
     dcaIrr: primary.irr,
     lumpIrr: primary.lumpIrr,
     vooIrr: primary.vooIrr,
@@ -329,7 +336,7 @@ export async function runCoveredCallAnalysis(params: {
     principles,
     quoteNote,
     rv,
-    gaps,
+    downsideVsBench,
     compoundVsSimple,
   });
 
@@ -387,12 +394,15 @@ function buildMarkdown(ctx: {
   principles: PrincipleHit[];
   quoteNote: string;
   rv: number;
-  gaps: ReturnType<typeof overnightGapStats>;
+  downsideVsBench: DownsideVsBenchInput;
   compoundVsSimple: number;
 }): string {
   const p = ctx.params;
   const fmt = (x: number) =>
     Number.isFinite(x) ? `${(x * 100).toFixed(2)}%` : "—";
+  const pp = (x: number) =>
+    Number.isFinite(x) ? `${(x * 100).toFixed(2)}%p` : "—";
+  const dvb = ctx.downsideVsBench;
   const lines = [
     `# 커버드콜 DCA 분석 \`${ctx.ticker}\``,
     "",
@@ -424,7 +434,13 @@ function buildMarkdown(ctx: {
     "",
     "## 메커니즘 프록시",
     `- 연 실현변동성(일간 로그수익): ${Number.isFinite(ctx.rv) ? (ctx.rv * 100).toFixed(1) + "%" : "—"}`,
-    `- 일간 급변(종가 기준 ±2%) 빈도: 상방 ${(ctx.gaps.gapUpPct * 100).toFixed(1)}% · 하방 ${(ctx.gaps.gapDownPct * 100).toFixed(1)}%`,
+    "",
+    `### 벤치마크(**${dvb.benchLabel}**) 대비 하방 (일간 종가, 자산 하락일만 지표화)`,
+    `- 비교 가능 일간 구간: **${dvb.tradingIntervals}**개`,
+    `- 자산 **하락일** 초과수익률(자산 일간수익률 − 벤치 일간수익률) 중앙값: **${pp(dvb.medianExcessWhenAssetDown)}** (음수면 그날 벤치보다 더 하락)`,
+    `- 전체 일간 중 자산 하락이 벤치보다 더 큰 날 비율: ${Number.isFinite(dvb.excessDownVsBenchShare) ? (dvb.excessDownVsBenchShare * 100).toFixed(1) + "%" : "—"}`,
+    `- 하락일 중 벤치 대비 **1%p 이상** 추가 하락 비율: ${Number.isFinite(dvb.severeExcessDownShare) ? (dvb.severeExcessDownShare * 100).toFixed(1) + "%" : "—"}`,
+    `- 원칙 2(갭·하방) 경고: **${dvb.distress ? "예" : "아니오"}**`,
     `- 복리총수익근사/CoC 비율: ${Number.isFinite(ctx.compoundVsSimple) ? ctx.compoundVsSimple.toFixed(2) : "—"}`,
     "",
     `## 등급: **${ctx.grade.code}**`,
