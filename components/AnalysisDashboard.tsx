@@ -20,11 +20,18 @@ function Section({
   title,
   description,
   children,
+  /** 4개 카드 등 짝수 행 — 가로 2×2 균형 */
+  layout = "three",
 }: {
   title: string;
   description: string;
   children: React.ReactNode;
+  layout?: "three" | "twoByTwo";
 }) {
+  const gridCls =
+    layout === "twoByTwo"
+      ? "grid grid-cols-1 sm:grid-cols-2 gap-3 items-stretch"
+      : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch";
   return (
     <section className="space-y-3">
       <div className="flex items-end justify-between gap-3 px-1">
@@ -35,9 +42,7 @@ function Section({
           <p className="text-[11px] text-gray-500 mt-0.5">{description}</p>
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch">
-        {children}
-      </div>
+      <div className={gridCls}>{children}</div>
     </section>
   );
 }
@@ -79,6 +84,7 @@ export default function AnalysisDashboard({
       </Section>
 
       <Section
+        layout="twoByTwo"
         title="② 장세 판별 — 지금이 추세 장인지, 박스 장인지, 위기 장인지"
         description="이 시장이 추세추종 전략에 우호적인지 평균회귀 전략에 우호적인지를 결정합니다. 변동성 레짐이 포지션 사이즈를 정합니다."
       >

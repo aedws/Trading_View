@@ -25,7 +25,6 @@ export default function RiskCard({ report }: { report: AnalysisReport }) {
     <IndicatorCard
       title="리스크-조정 수익"
       subtitle="RISK · SHARPE / SORTINO / CALMAR"
-      span="wide"
       big={
         <span className={r.sharpe >= 1 ? "text-accent-green" : r.sharpe < 0 ? "text-accent-red" : ""}>
           Sharpe {fmtNum(r.sharpe, 2)}

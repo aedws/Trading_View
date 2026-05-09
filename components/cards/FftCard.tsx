@@ -30,7 +30,6 @@ export default function FftCard({ report }: { report: AnalysisReport }) {
     <IndicatorCard
       title="FFT 파워 스펙트럼"
       subtitle="CYCLE · FOURIER"
-      span="wide"
       big={
         top[0] ? (
           <span>

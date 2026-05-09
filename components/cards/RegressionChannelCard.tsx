@@ -45,7 +45,6 @@ export default function RegressionChannelCard({
     <IndicatorCard
       title="로그-선형 회귀 채널"
       subtitle="LONG-TERM TREND · STATISTICAL"
-      span="wide"
       big={
         <span>
           z = <span className={z > 0 ? "text-accent-red" : "text-accent-green"}>
