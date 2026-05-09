@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+
+import MainNav from "./MainNav";
 import TickerInput from "./TickerInput";
 import type { RangeKey } from "@/lib/types";
 
@@ -28,11 +31,15 @@ export default function Header({
   return (
     <header className="sticky top-0 z-20 bg-bg/80 backdrop-blur border-b border-border">
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-        <div className="flex items-center gap-3">
-          <div className="text-lg font-bold tracking-tight">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link
+            href="/"
+            className="text-lg font-bold tracking-tight hover:opacity-90 shrink-0"
+          >
             <span className="text-accent-blue">시장</span>분석기
-          </div>
-          <div className="text-[10px] text-gray-500 hidden md:inline">
+          </Link>
+          <MainNav />
+          <div className="text-[10px] text-gray-500 hidden lg:inline flex-1 min-w-[140px]">
             TradingView + 통계·장세·리스크·주기 수학 대시보드
           </div>
         </div>

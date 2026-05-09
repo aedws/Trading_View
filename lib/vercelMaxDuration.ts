@@ -11,6 +11,7 @@
  * - VERCEL_MAX_DURATION_PRICES  (default 30) — /api/prices
  * - VERCEL_MAX_DURATION_MARKET (default 30) — /api/market
  * - VERCEL_MAX_DURATION_SEARCH (default 10) — /api/search
+ * - VERCEL_MAX_DURATION_BACKTEST (default 60) — /api/backtest
  *
  * Values above the account plan maximum are clamped by Vercel at runtime.
  */
@@ -37,4 +38,9 @@ export const MAX_DURATION_MARKET = envSeconds(
 export const MAX_DURATION_SEARCH = envSeconds(
   "VERCEL_MAX_DURATION_SEARCH",
   10
+);
+
+export const MAX_DURATION_BACKTEST = envSeconds(
+  "VERCEL_MAX_DURATION_BACKTEST",
+  60
 );
