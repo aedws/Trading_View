@@ -6,7 +6,7 @@ import MainNav from "@/components/MainNav";
 export const metadata = {
   title: "커버드콜 분석 — 시장분석기",
   description:
-    "야후 DCA·IRR·MDD·VOO 벤치·3종 재투자·원칙 기반 등급. 로컬 Python covered_call_dca/ 도 병행 가능.",
+    "야후 DCA·IRR·MDD·벤치마크 비교·3종 재투자·원칙 기반 등급.",
 };
 
 export default function CoveredCallPage() {
@@ -38,15 +38,6 @@ export default function CoveredCallPage() {
         </div>
 
         <CoveredCallAnalyzer />
-
-        <section className="rounded-xl border border-border bg-bg-card p-4 text-[12px] text-gray-500 space-y-2">
-          <p className="font-medium text-gray-400">CLI (로컬 검증·레퍼런스)</p>
-          <pre className="text-[11px] leading-relaxed overflow-x-auto p-3 rounded-lg bg-bg-soft border border-border-soft text-gray-300">
-            {`cd covered_call_dca
-pip install -r requirements.txt
-python validation_benchmarks.py`}
-          </pre>
-        </section>
 
         <footer className="pt-10 pb-16 border-t border-border text-[11px] text-gray-500 leading-relaxed">
           본 도구는 교육·참고용이며 투자 권유가 아닙니다.
