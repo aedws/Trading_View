@@ -12,6 +12,7 @@ export default function MainNav({ className = "" }: { className?: string }) {
   const pathname = usePathname();
   const onDash = pathname === "/" || pathname === "";
   const onBt = pathname === "/backtest";
+  const onCc = pathname === "/covered-call";
   return (
     <nav
       className={`flex items-center gap-1 rounded-lg border border-border bg-bg-soft p-0.5 shrink-0 ${className}`}
@@ -22,6 +23,9 @@ export default function MainNav({ className = "" }: { className?: string }) {
       </Link>
       <Link href="/backtest" className={onBt ? active : inactive}>
         DCA 백테스트
+      </Link>
+      <Link href="/covered-call" className={onCc ? active : inactive}>
+        커버드콜 분석
       </Link>
     </nav>
   );
