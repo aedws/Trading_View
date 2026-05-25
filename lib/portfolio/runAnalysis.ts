@@ -103,8 +103,20 @@ export interface PortfolioAnalysisResult {
     selfReinvest: boolean;
   }>;
 
-  /** Portfolio: weights are normalized to sum to 1. */
+  /** Portfolio: target weights at the start (= input, normalized to 1). */
   weights: Array<{ ticker: string; weight: number }>;
+  /**
+   * Realized weights at the end of the window. For core legs this drifts
+   * from the target due to returns + rebalancing cadence; for dividend-only
+   * legs the realized weight is the accumulated cash routed there.
+   */
+  currentWeights: Array<{
+    ticker: string;
+    weight: number;
+    /** Nominal USD value (final shares × last rawClose). */
+    value: number;
+    isDividendOnly: boolean;
+  }>;
 
   /** Headline portfolio numbers (TWR-based). */
   portfolio: {
@@ -254,6 +266,15 @@ export async function runPortfolioAnalysis(
     })),
     dividendRouting,
     weights: composed.legs.map((l) => ({ ticker: l.ticker, weight: l.weight })),
+    currentWeights: (() => {
+      const total = composed.finalLegValues.reduce((s, v) => s + (v > 0 ? v : 0), 0);
+      return composed.legs.map((l, i) => ({
+        ticker: l.ticker,
+        value: composed.finalLegValues[i],
+        weight: total > 0 ? composed.finalLegValues[i] / total : 0,
+        isDividendOnly: l.isDividendOnly,
+      }));
+    })(),
     portfolio: {
       totalReturn: portTr,
       cagr: portCagr,

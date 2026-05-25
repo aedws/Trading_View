@@ -96,6 +96,8 @@ export interface ComposedSeries {
   portFlows: CashFlow[];
   /** XIRR-ready cash flows for the benchmark. */
   benchFlows: CashFlow[];
+  /** Final nominal value per leg (matches `legs[]` order). */
+  finalLegValues: number[];
 }
 
 /**
@@ -322,6 +324,7 @@ export async function composePortfolio(args: {
     totalContributed,
     portFlows,
     benchFlows,
+    finalLegValues: sim.finalLegValues,
   };
 }
 
@@ -359,6 +362,8 @@ interface SimOutput {
   twrWealth: number[];
   /** Nominal wealth (includes contributions). */
   nominalWealth: number[];
+  /** Per-leg final value in nominal terms (shares × rawClose at last date). */
+  finalLegValues: number[];
 }
 
 function simulatePortfolio(args: {
@@ -473,7 +478,15 @@ function simulatePortfolio(args: {
     nominalWealth[t] = totalNominal;
   }
 
-  return { twrReturns, twrWealth, nominalWealth };
+  // Snapshot per-leg final value at the last date (for current-weight pie).
+  const lastIdx = N - 1;
+  const finalLegValues = new Array(nLegs).fill(0);
+  for (let j = 0; j < nLegs; j++) {
+    const px = rawCloses[j][lastIdx];
+    if (px > 0 && Number.isFinite(px)) finalLegValues[j] = shares[j] * px;
+  }
+
+  return { twrReturns, twrWealth, nominalWealth, finalLegValues };
 }
 
 function simulateSingleAsset(args: {
@@ -509,7 +522,7 @@ function simulateSingleAsset(args: {
     totalNominal = totalAfter > 0 ? totalAfter : prevNominal;
     nominalWealth[t] = totalNominal;
   }
-  return { twrReturns, twrWealth, nominalWealth };
+  return { twrReturns, twrWealth, nominalWealth, finalLegValues: [totalNominal] };
 }
 
 /* ───────────────── DCA schedule ───────────────── */

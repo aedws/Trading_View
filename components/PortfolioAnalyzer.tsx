@@ -133,6 +133,12 @@ interface ApiResponse {
     selfReinvest: boolean;
   }>;
   weights: Array<{ ticker: string; weight: number }>;
+  currentWeights: Array<{
+    ticker: string;
+    weight: number;
+    value: number;
+    isDividendOnly: boolean;
+  }>;
   portfolio: {
     totalReturn: number;
     cagr: number;
@@ -1081,6 +1087,11 @@ function Results({ data }: { data: ApiResponse }) {
         <h3 className="text-sm font-medium text-gray-200">상관 행렬</h3>
         <CorrelationHeatmap matrix={data.correlation} />
       </section>
+
+      <AllocationCompare
+        target={data.weights}
+        current={data.currentWeights}
+      />
     </>
   );
 }
@@ -1137,6 +1148,271 @@ function YearlyReturnsTable({
         </table>
       </div>
     </section>
+  );
+}
+
+const DONUT_PALETTE = [
+  "#3b82f6", // blue
+  "#14b8a6", // teal
+  "#22c55e", // green
+  "#fcd34d", // amber
+  "#f97316", // orange
+  "#ef4444", // red
+  "#a855f7", // purple
+  "#06b6d4", // cyan
+  "#ec4899", // pink
+  "#84cc16", // lime
+  "#d946ef", // fuchsia
+  "#eab308", // yellow
+];
+
+function colorFor(ticker: string, idx: number): string {
+  // Stable per-ticker hash → palette index. Falls back to row index on
+  // collision, so colors stay consistent across target↔current donuts.
+  let h = 0;
+  for (let i = 0; i < ticker.length; i++) h = (h * 31 + ticker.charCodeAt(i)) | 0;
+  const i = Math.abs(h ^ idx) % DONUT_PALETTE.length;
+  return DONUT_PALETTE[i];
+}
+
+interface AllocSlice {
+  ticker: string;
+  weight: number;
+  color: string;
+  isDividendOnly?: boolean;
+}
+
+function AllocationCompare({
+  target,
+  current,
+}: {
+  target: Array<{ ticker: string; weight: number }>;
+  current: Array<{
+    ticker: string;
+    weight: number;
+    value: number;
+    isDividendOnly: boolean;
+  }>;
+}) {
+  // Unified ticker order = target legs first (in original order), then any
+  // dividend-only / drifted legs that only show up in `current`. We assign
+  // a stable color per ticker so both donuts share the same hue per asset.
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+  for (const t of target) {
+    if (!seen.has(t.ticker)) {
+      ordered.push(t.ticker);
+      seen.add(t.ticker);
+    }
+  }
+  for (const c of current) {
+    if (!seen.has(c.ticker)) {
+      ordered.push(c.ticker);
+      seen.add(c.ticker);
+    }
+  }
+  const colorMap = new Map(ordered.map((t, i) => [t, colorFor(t, i)]));
+
+  const targetMap = new Map(target.map((t) => [t.ticker, t.weight]));
+  const currentMap = new Map(current.map((c) => [c.ticker, c.weight]));
+  const divOnlySet = new Set(
+    current.filter((c) => c.isDividendOnly).map((c) => c.ticker),
+  );
+
+  const targetSlices: AllocSlice[] = ordered
+    .map((t) => ({
+      ticker: t,
+      weight: targetMap.get(t) ?? 0,
+      color: colorMap.get(t) ?? "#9ca3af",
+      isDividendOnly: divOnlySet.has(t),
+    }))
+    .filter((s) => s.weight > 0);
+  const currentSlices: AllocSlice[] = ordered
+    .map((t) => ({
+      ticker: t,
+      weight: currentMap.get(t) ?? 0,
+      color: colorMap.get(t) ?? "#9ca3af",
+      isDividendOnly: divOnlySet.has(t),
+    }))
+    .filter((s) => s.weight > 1e-6);
+
+  const driftRows = ordered.map((t) => {
+    const tw = targetMap.get(t) ?? 0;
+    const cw = currentMap.get(t) ?? 0;
+    return {
+      ticker: t,
+      target: tw,
+      current: cw,
+      drift: cw - tw,
+      color: colorMap.get(t) ?? "#9ca3af",
+      isDividendOnly: divOnlySet.has(t),
+    };
+  });
+
+  return (
+    <section className="rounded-xl border border-border bg-bg-card p-4 space-y-3">
+      <h3 className="text-sm font-medium text-gray-200">포트폴리오 비중 비교</h3>
+      <p className="text-[11px] text-gray-500 leading-relaxed">
+        시작 시점의 <b>목표 비중</b> vs 종료 시점의 <b>현재 비중</b>. 차이는
+        리밸런싱 주기 내부 드리프트 + 배당 분배(특히 배당 전용 종목 누적) 때문에
+        발생합니다.
+      </p>
+      <div className="grid lg:grid-cols-2 gap-4">
+        <DonutPanel title="시작 시점 (목표 비중)" slices={targetSlices} />
+        <DonutPanel title="현재 시점 (실현 비중)" slices={currentSlices} />
+      </div>
+      <div className="overflow-x-auto text-xs">
+        <table className="min-w-full border-collapse">
+          <thead>
+            <tr className="text-left text-gray-500 border-b border-border-soft">
+              <th className="py-2 pr-3">티커</th>
+              <th className="py-2 pr-3 text-right">목표</th>
+              <th className="py-2 pr-3 text-right">현재</th>
+              <th className="py-2 text-right">드리프트</th>
+            </tr>
+          </thead>
+          <tbody className="text-gray-200 font-mono">
+            {driftRows.map((r) => (
+              <tr key={r.ticker} className="border-b border-border-soft/60">
+                <td className="py-1.5 pr-3 text-gray-300 font-sans">
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-sm mr-2 align-middle"
+                    style={{ backgroundColor: r.color }}
+                  />
+                  {r.ticker}
+                  {r.isDividendOnly ? (
+                    <span className="ml-1 inline-block px-1 text-[9px] uppercase tracking-wide rounded border border-accent-blue/60 text-accent-blue">
+                      배당전용
+                    </span>
+                  ) : null}
+                </td>
+                <td className="py-1.5 pr-3 text-right">
+                  {r.target > 0 ? pct(r.target, 1) : <span className="text-gray-500">—</span>}
+                </td>
+                <td className="py-1.5 pr-3 text-right">{pct(r.current, 1)}</td>
+                <td
+                  className={`py-1.5 text-right ${
+                    Math.abs(r.drift) < 1e-4
+                      ? "text-gray-500"
+                      : r.drift >= 0
+                        ? "text-accent-green"
+                        : "text-amber-400"
+                  }`}
+                >
+                  {r.drift >= 0 ? "+" : ""}
+                  {pp(r.drift)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function DonutPanel({
+  title,
+  slices,
+}: {
+  title: string;
+  slices: AllocSlice[];
+}) {
+  return (
+    <div className="rounded-lg border border-border-soft bg-bg-soft/30 p-3 space-y-3">
+      <div className="text-[11px] text-gray-400">{title}</div>
+      <div className="flex flex-col items-center gap-3">
+        <DonutChart slices={slices} />
+        <ul className="w-full space-y-1 text-xs">
+          {slices.map((s) => (
+            <li
+              key={s.ticker}
+              className="flex items-center justify-between gap-2"
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <span
+                  className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+                  style={{ backgroundColor: s.color }}
+                />
+                <span className="font-mono text-gray-100 truncate">
+                  {s.ticker}
+                </span>
+                {s.isDividendOnly ? (
+                  <span className="text-[9px] uppercase tracking-wide px-1 rounded border border-accent-blue/60 text-accent-blue">
+                    배당전용
+                  </span>
+                ) : null}
+              </span>
+              <span className="num text-gray-100">{pct(s.weight, 1)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function DonutChart({ slices }: { slices: AllocSlice[] }) {
+  const total = slices.reduce((s, x) => s + x.weight, 0);
+  const size = 180;
+  const cx = size / 2;
+  const cy = size / 2;
+  const rOuter = 78;
+  const rInner = 48;
+  if (total <= 0) {
+    return (
+      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
+        <circle cx={cx} cy={cy} r={rOuter} fill="rgb(31 41 55 / 0.4)" />
+        <circle cx={cx} cy={cy} r={rInner} fill="#0b0b0b" />
+        <text
+          x={cx}
+          y={cy + 4}
+          textAnchor="middle"
+          fontSize={11}
+          fill="#9ca3af"
+        >
+          데이터 없음
+        </text>
+      </svg>
+    );
+  }
+
+  let acc = 0;
+  const arcs = slices.map((s) => {
+    const startAngle = (acc / total) * Math.PI * 2 - Math.PI / 2;
+    acc += s.weight;
+    const endAngle = (acc / total) * Math.PI * 2 - Math.PI / 2;
+    const large = endAngle - startAngle > Math.PI ? 1 : 0;
+    const xs1 = cx + rOuter * Math.cos(startAngle);
+    const ys1 = cy + rOuter * Math.sin(startAngle);
+    const xs2 = cx + rOuter * Math.cos(endAngle);
+    const ys2 = cy + rOuter * Math.sin(endAngle);
+    const xi1 = cx + rInner * Math.cos(endAngle);
+    const yi1 = cy + rInner * Math.sin(endAngle);
+    const xi2 = cx + rInner * Math.cos(startAngle);
+    const yi2 = cy + rInner * Math.sin(startAngle);
+    const d = [
+      `M ${xs1.toFixed(2)} ${ys1.toFixed(2)}`,
+      `A ${rOuter} ${rOuter} 0 ${large} 1 ${xs2.toFixed(2)} ${ys2.toFixed(2)}`,
+      `L ${xi1.toFixed(2)} ${yi1.toFixed(2)}`,
+      `A ${rInner} ${rInner} 0 ${large} 0 ${xi2.toFixed(2)} ${yi2.toFixed(2)}`,
+      "Z",
+    ].join(" ");
+    return { d, fill: s.color, key: s.ticker };
+  });
+
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
+      {arcs.map((a) => (
+        <path
+          key={a.key}
+          d={a.d}
+          fill={a.fill}
+          stroke="#0b0b0b"
+          strokeWidth={1.2}
+        />
+      ))}
+    </svg>
   );
 }
 
