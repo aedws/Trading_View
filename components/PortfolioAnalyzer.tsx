@@ -14,10 +14,18 @@ const REBAL_LABEL: Record<Rebalance, string> = {
   yearly: "연간 리밸런싱",
 };
 
+interface DividendTargetRow {
+  id: string;
+  ticker: string;
+  weight: number;
+}
+
 interface LegRow {
   id: string;
   ticker: string;
   weight: number;
+  divExpanded: boolean;
+  divTargets: DividendTargetRow[]; // empty = default 100% self
 }
 
 interface CapmStats {
@@ -69,6 +77,15 @@ interface ApiResponse {
   rebalance: Rebalance;
   riskFreeAnnual: number;
   benchmark: string;
+  requestedRange: { start: string; end: string };
+  effectiveRange: { start: string; end: string };
+  bindingLeg: { ticker: string; firstDate: string } | null;
+  legInceptions: Array<{ ticker: string; firstDate: string }>;
+  dividendRouting: Array<{
+    ticker: string;
+    targets: Array<{ ticker: string; weight: number }>;
+    selfReinvest: boolean;
+  }>;
   weights: Array<{ ticker: string; weight: number }>;
   portfolio: {
     totalReturn: number;
@@ -134,11 +151,15 @@ function newId(): string {
   return Math.random().toString(36).slice(2, 9);
 }
 
+function mkLeg(ticker: string, weight: number): LegRow {
+  return { id: newId(), ticker, weight, divExpanded: false, divTargets: [] };
+}
+
 export default function PortfolioAnalyzer() {
   const [legs, setLegs] = useState<LegRow[]>([
-    { id: newId(), ticker: "VOO", weight: 60 },
-    { id: newId(), ticker: "QQQ", weight: 30 },
-    { id: newId(), ticker: "GLD", weight: 10 },
+    mkLeg("VOO", 60),
+    mkLeg("QQQ", 30),
+    mkLeg("GLD", 10),
   ]);
   const [mode, setMode] = useState<Mode>("years");
   const [years, setYears] = useState(5);
@@ -167,7 +188,59 @@ export default function PortfolioAnalyzer() {
     setLegs((cur) => (cur.length <= 1 ? cur : cur.filter((l) => l.id !== id)));
   }, []);
   const addLeg = useCallback(() => {
-    setLegs((cur) => (cur.length >= 10 ? cur : [...cur, { id: newId(), ticker: "", weight: 0 }]));
+    setLegs((cur) => (cur.length >= 10 ? cur : [...cur, mkLeg("", 0)]));
+  }, []);
+
+  const toggleDivPanel = useCallback((id: string) => {
+    setLegs((cur) =>
+      cur.map((l) => (l.id === id ? { ...l, divExpanded: !l.divExpanded } : l)),
+    );
+  }, []);
+  const addDivTarget = useCallback((legId: string) => {
+    setLegs((cur) =>
+      cur.map((l) => {
+        if (l.id !== legId) return l;
+        if (l.divTargets.length >= 10) return l;
+        return {
+          ...l,
+          divTargets: [
+            ...l.divTargets,
+            { id: newId(), ticker: l.ticker, weight: 100 },
+          ],
+        };
+      }),
+    );
+  }, []);
+  const removeDivTarget = useCallback((legId: string, targetId: string) => {
+    setLegs((cur) =>
+      cur.map((l) =>
+        l.id === legId
+          ? { ...l, divTargets: l.divTargets.filter((d) => d.id !== targetId) }
+          : l,
+      ),
+    );
+  }, []);
+  const updateDivTarget = useCallback(
+    (legId: string, targetId: string, patch: Partial<DividendTargetRow>) => {
+      setLegs((cur) =>
+        cur.map((l) =>
+          l.id === legId
+            ? {
+                ...l,
+                divTargets: l.divTargets.map((d) =>
+                  d.id === targetId ? { ...d, ...patch } : d,
+                ),
+              }
+            : l,
+        ),
+      );
+    },
+    [],
+  );
+  const resetDivToSelf = useCallback((legId: string) => {
+    setLegs((cur) =>
+      cur.map((l) => (l.id === legId ? { ...l, divTargets: [] } : l)),
+    );
   }, []);
   const equalize = useCallback(() => {
     setLegs((cur) => {
@@ -184,8 +257,16 @@ export default function PortfolioAnalyzer() {
     });
   }, []);
   const applyPreset = useCallback((p: (typeof PRESETS)[number]) => {
-    setLegs(p.legs.map((l) => ({ id: newId(), ticker: l.ticker, weight: l.weight })));
+    setLegs(p.legs.map((l) => mkLeg(l.ticker, l.weight)));
   }, []);
+
+  const legTickerOptions = useMemo(
+    () =>
+      legs
+        .map((l) => l.ticker.trim().toUpperCase())
+        .filter((t, i, arr) => t && arr.indexOf(t) === i),
+    [legs],
+  );
 
   const run = useCallback(async () => {
     setLoading(true);
@@ -194,7 +275,19 @@ export default function PortfolioAnalyzer() {
       const payload = {
         legs: legs
           .filter((l) => l.ticker.trim() && l.weight > 0)
-          .map((l) => ({ ticker: l.ticker.trim().toUpperCase(), weight: l.weight })),
+          .map((l) => {
+            const dist = l.divTargets
+              .filter((d) => d.ticker.trim() && d.weight > 0)
+              .map((d) => ({
+                ticker: d.ticker.trim().toUpperCase(),
+                weight: d.weight,
+              }));
+            return {
+              ticker: l.ticker.trim().toUpperCase(),
+              weight: l.weight,
+              ...(dist.length > 0 ? { dividendDistribution: dist } : {}),
+            };
+          }),
         benchmark: bench.trim().toUpperCase() || "VOO",
         mode,
         years: mode === "years" ? years : undefined,
@@ -279,48 +372,171 @@ export default function PortfolioAnalyzer() {
           </div>
 
           <div className="space-y-1.5">
-            {legs.map((l, i) => (
-              <div
-                key={l.id}
-                className="grid grid-cols-[1fr_120px_28px] gap-2 items-center"
-              >
-                <TickerAutocomplete
-                  mode="single"
-                  value={l.ticker}
-                  onChange={(v) =>
-                    updateLeg(l.id, { ticker: v.replace(/\s+/g, "").toUpperCase() })
-                  }
-                  placeholder={`종목 ${i + 1}`}
-                  inputId={`pf-leg-${l.id}`}
-                  className="w-full"
-                  inputClassName="w-full rounded-lg bg-bg-soft border border-border px-2 py-1.5 font-mono text-gray-100 uppercase text-sm"
-                />
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    value={Number.isFinite(l.weight) ? l.weight : 0}
-                    onChange={(e) =>
-                      updateLeg(l.id, { weight: Number(e.target.value) })
-                    }
-                    className="w-full rounded-lg bg-bg-soft border border-border pl-2 pr-6 py-1.5 text-right text-gray-100 text-sm"
-                  />
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-500 pointer-events-none">
-                    %
-                  </span>
+            {legs.map((l, i) => {
+              const divSum = l.divTargets.reduce(
+                (s, d) => s + (Number.isFinite(d.weight) ? d.weight : 0),
+                0,
+              );
+              const isSelfOnly =
+                l.divTargets.length === 0 ||
+                (l.divTargets.length === 1 &&
+                  l.divTargets[0].ticker.trim().toUpperCase() ===
+                    l.ticker.trim().toUpperCase());
+              return (
+                <div key={l.id} className="space-y-1">
+                  <div className="grid grid-cols-[1fr_120px_72px_28px] gap-2 items-center">
+                    <TickerAutocomplete
+                      mode="single"
+                      value={l.ticker}
+                      onChange={(v) =>
+                        updateLeg(l.id, {
+                          ticker: v.replace(/\s+/g, "").toUpperCase(),
+                        })
+                      }
+                      placeholder={`종목 ${i + 1}`}
+                      inputId={`pf-leg-${l.id}`}
+                      className="w-full"
+                      inputClassName="w-full rounded-lg bg-bg-soft border border-border px-2 py-1.5 font-mono text-gray-100 uppercase text-sm"
+                    />
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.5}
+                        value={Number.isFinite(l.weight) ? l.weight : 0}
+                        onChange={(e) =>
+                          updateLeg(l.id, { weight: Number(e.target.value) })
+                        }
+                        className="w-full rounded-lg bg-bg-soft border border-border pl-2 pr-6 py-1.5 text-right text-gray-100 text-sm"
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-500 pointer-events-none">
+                        %
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleDivPanel(l.id)}
+                      className={`text-[11px] px-2 py-1 rounded border transition ${
+                        isSelfOnly
+                          ? "border-border text-gray-400 hover:text-gray-100"
+                          : "border-accent-blue/60 text-accent-blue"
+                      } ${l.divExpanded ? "bg-bg-soft" : ""}`}
+                      title="이 종목의 배당금을 어떻게 분배할지 설정"
+                    >
+                      배당 {l.divExpanded ? "▴" : "▾"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeLeg(l.id)}
+                      disabled={legs.length <= 1}
+                      aria-label="종목 제거"
+                      className="text-gray-500 hover:text-amber-400 disabled:opacity-30 disabled:hover:text-gray-500"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  {l.divExpanded ? (
+                    <div className="ml-1 mt-1 rounded-md border border-border-soft bg-bg-soft/60 p-2 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2 text-[11px] text-gray-400">
+                        <span>
+                          <span className="text-gray-300">{l.ticker || "—"}</span>{" "}
+                          배당 분배 ({l.divTargets.length}/10)
+                          {l.divTargets.length > 0 ? (
+                            <span className="ml-2 text-gray-500">
+                              합 {divSum.toFixed(2)}%{" "}
+                              {Math.abs(divSum - 100) > 0.01
+                                ? "(자동 정규화)"
+                                : ""}
+                            </span>
+                          ) : (
+                            <span className="ml-2 text-gray-500">
+                              · 비워두면 100% 자기 재투자
+                            </span>
+                          )}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => resetDivToSelf(l.id)}
+                            className="px-2 py-0.5 rounded border border-border text-gray-300 hover:text-gray-100"
+                          >
+                            자기 재투자로 초기화
+                          </button>
+                          <button
+                            type="button"
+                            disabled={l.divTargets.length >= 10}
+                            onClick={() => addDivTarget(l.id)}
+                            className="px-2 py-0.5 rounded border border-border text-gray-300 hover:text-gray-100 disabled:opacity-40"
+                          >
+                            + 분배
+                          </button>
+                        </div>
+                      </div>
+
+                      {l.divTargets.length === 0 ? (
+                        <div className="text-[11px] text-gray-500 px-1 py-0.5">
+                          기본: 이 종목에서 발생한 배당금은 자기 자신({l.ticker || "—"})으로
+                          100% 재투자됩니다.
+                        </div>
+                      ) : (
+                        l.divTargets.map((d) => (
+                          <div
+                            key={d.id}
+                            className="grid grid-cols-[1fr_100px_28px] gap-2 items-center"
+                          >
+                            <select
+                              value={d.ticker}
+                              onChange={(e) =>
+                                updateDivTarget(l.id, d.id, {
+                                  ticker: e.target.value,
+                                })
+                              }
+                              className="w-full rounded-md bg-bg-card border border-border-soft px-2 py-1 font-mono text-xs text-gray-100 uppercase"
+                            >
+                              {legTickerOptions.length === 0 ? (
+                                <option value="">(종목 없음)</option>
+                              ) : (
+                                legTickerOptions.map((t) => (
+                                  <option key={t} value={t}>
+                                    {t}
+                                  </option>
+                                ))
+                              )}
+                            </select>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.5}
+                                value={Number.isFinite(d.weight) ? d.weight : 0}
+                                onChange={(e) =>
+                                  updateDivTarget(l.id, d.id, {
+                                    weight: Number(e.target.value),
+                                  })
+                                }
+                                className="w-full rounded-md bg-bg-card border border-border-soft pl-2 pr-6 py-1 text-right text-gray-100 text-xs"
+                              />
+                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 pointer-events-none">
+                                %
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeDivTarget(l.id, d.id)}
+                              aria-label="배당 분배 제거"
+                              className="text-gray-500 hover:text-amber-400"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  ) : null}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => removeLeg(l.id)}
-                  disabled={legs.length <= 1}
-                  aria-label="종목 제거"
-                  className="text-gray-500 hover:text-amber-400 disabled:opacity-30 disabled:hover:text-gray-500"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -429,8 +645,59 @@ export default function PortfolioAnalyzer() {
 }
 
 function Results({ data }: { data: ApiResponse }) {
+  const reqStart = data.requestedRange.start;
+  const effStart = data.effectiveRange.start;
+  const clampedStart = !!reqStart && reqStart < effStart;
   return (
     <>
+      {data.bindingLeg && clampedStart ? (
+        <div className="rounded-lg border border-accent-blue/40 bg-accent-blue/5 px-3 py-2 text-[12px] text-gray-200 flex flex-wrap items-center justify-between gap-2">
+          <span>
+            기간이 신생 종목 기준으로 자동 정렬되었습니다 →{" "}
+            <span className="font-mono text-accent-blue">
+              {data.bindingLeg.ticker}
+            </span>{" "}
+            상장 이후 ({data.bindingLeg.firstDate}). 요청{" "}
+            <span className="text-gray-400">
+              {data.requestedRange.start} ~ {data.requestedRange.end}
+            </span>{" "}
+            → 실제{" "}
+            <span className="text-gray-100">
+              {data.effectiveRange.start} ~ {data.effectiveRange.end}
+            </span>
+          </span>
+        </div>
+      ) : null}
+
+      {data.dividendRouting.some((r) => !r.selfReinvest) ? (
+        <section className="rounded-xl border border-border bg-bg-card p-4 space-y-1.5">
+          <h3 className="text-sm font-medium text-gray-200">배당 분배 적용</h3>
+          <ul className="text-[12px] text-gray-300 space-y-1">
+            {data.dividendRouting.map((r) => (
+              <li key={r.ticker} className="flex flex-wrap items-baseline gap-1">
+                <span className="font-mono text-gray-100">{r.ticker}</span>
+                <span className="text-gray-500">→</span>
+                {r.selfReinvest ? (
+                  <span className="text-gray-400">자기 재투자 100%</span>
+                ) : (
+                  r.targets.map((t, i) => (
+                    <span key={`${r.ticker}-${t.ticker}-${i}`} className="text-gray-300">
+                      <span className="font-mono text-gray-100">{t.ticker}</span>{" "}
+                      <span className="text-gray-500">
+                        {(t.weight * 100).toFixed(1)}%
+                      </span>
+                      {i < r.targets.length - 1 ? (
+                        <span className="text-gray-600">, </span>
+                      ) : null}
+                    </span>
+                  ))
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section className="rounded-xl border border-border bg-bg-card p-4 space-y-3">
         <div className="flex items-baseline justify-between gap-2 flex-wrap">
           <h3 className="text-sm font-medium text-gray-200">개요</h3>

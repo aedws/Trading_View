@@ -1,6 +1,11 @@
 import type { FetchMode } from "@/lib/bt/yahoo";
 
-import { composePortfolio, type LegInput, type RebalanceMode } from "./composer";
+import {
+  composePortfolio,
+  type DividendTarget,
+  type LegInput,
+  type RebalanceMode,
+} from "./composer";
 import {
   annualizedVol,
   cagrFromWealth,
@@ -47,6 +52,22 @@ export interface PortfolioAnalysisResult {
   rebalance: RebalanceMode;
   riskFreeAnnual: number;
   benchmark: string;
+
+  /** Requested window (from input). */
+  requestedRange: { start: string; end: string };
+  /** Effective window (= intersection / forced by youngest leg). */
+  effectiveRange: { start: string; end: string };
+  /** Which leg is forcing the start = youngest listing date. */
+  bindingLeg: { ticker: string; firstDate: string } | null;
+  /** Per-leg first available date (independent of intersection). */
+  legInceptions: Array<{ ticker: string; firstDate: string }>;
+  /** Resolved per-leg dividend distribution (each sums to 1.0). */
+  dividendRouting: Array<{
+    ticker: string;
+    targets: DividendTarget[];
+    /** Convenience: true if all weight goes back to the leg itself. */
+    selfReinvest: boolean;
+  }>;
 
   /** Portfolio: weights are normalized to sum to 1. */
   weights: Array<{ ticker: string; weight: number }>;
@@ -147,6 +168,15 @@ export async function runPortfolioAnalysis(
     composed.benchWealth,
   );
 
+  const dividendRouting = composed.legs.map((l) => ({
+    ticker: l.ticker,
+    targets: l.dividendDistribution,
+    selfReinvest:
+      l.dividendDistribution.length === 1 &&
+      l.dividendDistribution[0].ticker === l.ticker &&
+      Math.abs(l.dividendDistribution[0].weight - 1) < 1e-9,
+  }));
+
   return {
     startDate,
     endDate,
@@ -154,6 +184,14 @@ export async function runPortfolioAnalysis(
     rebalance: composed.rebalance,
     riskFreeAnnual,
     benchmark: composed.bench.ticker,
+    requestedRange: composed.requestedRange,
+    effectiveRange: composed.effectiveRange,
+    bindingLeg: composed.bindingLeg,
+    legInceptions: composed.legs.map((l) => ({
+      ticker: l.ticker,
+      firstDate: l.firstDate,
+    })),
+    dividendRouting,
     weights: composed.legs.map((l) => ({ ticker: l.ticker, weight: l.weight })),
     portfolio: {
       totalReturn: portTr,

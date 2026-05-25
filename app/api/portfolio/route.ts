@@ -23,11 +23,28 @@ export async function POST(req: Request) {
   const legs: LegInput[] = [];
   for (const item of rawLegs) {
     if (!item || typeof item !== "object") continue;
-    const t = String((item as Record<string, unknown>).ticker ?? "").trim().toUpperCase();
-    const w = Number((item as Record<string, unknown>).weight);
+    const rec = item as Record<string, unknown>;
+    const t = String(rec.ticker ?? "").trim().toUpperCase();
+    const w = Number(rec.weight);
     if (!t) continue;
     if (!Number.isFinite(w) || w <= 0) continue;
-    legs.push({ ticker: t, weight: w });
+
+    let dividendDistribution: LegInput["dividendDistribution"];
+    if (Array.isArray(rec.dividendDistribution)) {
+      const arr: NonNullable<LegInput["dividendDistribution"]> = [];
+      for (const d of rec.dividendDistribution) {
+        if (!d || typeof d !== "object") continue;
+        const dt = String((d as Record<string, unknown>).ticker ?? "")
+          .trim()
+          .toUpperCase();
+        const dw = Number((d as Record<string, unknown>).weight);
+        if (!dt) continue;
+        if (!Number.isFinite(dw) || dw <= 0) continue;
+        arr.push({ ticker: dt, weight: dw });
+      }
+      if (arr.length > 0) dividendDistribution = arr;
+    }
+    legs.push({ ticker: t, weight: w, dividendDistribution });
   }
   if (legs.length === 0) {
     return NextResponse.json(
