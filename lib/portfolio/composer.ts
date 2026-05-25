@@ -50,6 +50,13 @@ export interface LegSeries {
   firstDate: string;
   /** Resolved dividend distribution (sum to 1.0). */
   dividendDistribution: DividendTarget[];
+  /**
+   * True if this leg only exists as a dividend-distribution target —
+   * it receives no initial allocation, no new DCA contributions, and is
+   * excluded from rebalancing. It grows purely from dividends routed to
+   * it by other legs (plus its own price action / self-reinvested divs).
+   */
+  isDividendOnly: boolean;
 }
 
 export interface ComposedSeries {
@@ -121,19 +128,41 @@ export async function composePortfolio(args: {
     throw new Error("최소 1개 종목이 필요합니다.");
   }
   if (args.legs.length > 10) {
-    throw new Error("최대 10개 종목까지 합성 가능합니다.");
+    throw new Error("최대 10개 코어 종목까지 가능합니다.");
   }
   const sumW = args.legs.reduce((s, l) => s + l.weight, 0);
   if (!Number.isFinite(sumW) || sumW <= 0) {
     throw new Error("가중치 합이 0보다 커야 합니다.");
   }
-  const legTickers = args.legs.map((l) => l.ticker.trim().toUpperCase());
-  const normLegs = args.legs.map((l, idx) => {
-    const ticker = legTickers[idx];
+
+  // Step 1: resolve core legs (positive weight, target allocation).
+  const coreTickers = args.legs.map((l) => l.ticker.trim().toUpperCase());
+  const coreLegs = args.legs.map((l, idx) => {
+    const ticker = coreTickers[idx];
     const weight = l.weight / sumW;
-    const dist = resolveDistribution(ticker, l.dividendDistribution, legTickers);
-    return { ticker, weight, dividendDistribution: dist };
+    const dist = resolveDistribution(ticker, l.dividendDistribution);
+    return { ticker, weight, dividendDistribution: dist, isDividendOnly: false };
   });
+
+  // Step 2: collect any dividend-target tickers that are NOT among core
+  // legs. Those become "dividend-only" legs: weight=0, no rebalancing,
+  // no DCA — they only grow from routed dividend cash + own price action.
+  const coreSet = new Set(coreTickers);
+  const extraSet = new Set<string>();
+  for (const l of coreLegs) {
+    for (const d of l.dividendDistribution) {
+      if (!coreSet.has(d.ticker)) extraSet.add(d.ticker);
+    }
+  }
+  const extraTickers = [...extraSet];
+  const extraLegs = extraTickers.map((ticker) => ({
+    ticker,
+    weight: 0,
+    // div-only legs always self-reinvest their own dividends
+    dividendDistribution: [{ ticker, weight: 1 }] as DividendTarget[],
+    isDividendOnly: true,
+  }));
+  const normLegs = [...coreLegs, ...extraLegs];
 
   const benchSym = args.benchmark.trim().toUpperCase();
   const fetches = await Promise.all([
@@ -202,6 +231,7 @@ export async function composePortfolio(args: {
     returns: simpleDailyReturns(legAdjAligned[i]),
     firstDate: legFirstDates[i],
     dividendDistribution: l.dividendDistribution,
+    isDividendOnly: l.isDividendOnly,
   }));
 
   // Build DCA contribution schedule (per-date amount; 0 means no contribution).
@@ -223,6 +253,7 @@ export async function composePortfolio(args: {
     weights: normLegs.map((l) => l.weight),
     distributions: normLegs.map((l) => l.dividendDistribution),
     legTickers: normLegs.map((l) => l.ticker),
+    isDividendOnly: normLegs.map((l) => l.isDividendOnly),
     rawCloses: legRawAligned,
     divBetween: legDivBetween,
     splitBetween: legSplitBetween,
@@ -299,9 +330,9 @@ export async function composePortfolio(args: {
 function resolveDistribution(
   selfTicker: string,
   raw: DividendTarget[] | undefined,
-  validTickers: string[],
 ): DividendTarget[] {
-  const validSet = new Set(validTickers);
+  // Accept ANY ticker (including ones not in the portfolio) — those get
+  // turned into zero-weight "dividend-only" legs by the caller.
   const list = (raw ?? [])
     .map((d) => ({
       ticker: d.ticker?.trim().toUpperCase() ?? "",
@@ -309,10 +340,7 @@ function resolveDistribution(
     }))
     .filter(
       (d) =>
-        d.ticker &&
-        validSet.has(d.ticker) &&
-        Number.isFinite(d.weight) &&
-        d.weight > 0,
+        d.ticker && Number.isFinite(d.weight) && d.weight > 0,
     );
   if (list.length === 0) {
     return [{ ticker: selfTicker, weight: 1 }];
@@ -337,6 +365,8 @@ function simulatePortfolio(args: {
   weights: number[];
   distributions: DividendTarget[][];
   legTickers: string[];
+  /** Per-leg flag: skip rebalancing + DCA contribution for these. */
+  isDividendOnly: boolean[];
   rawCloses: number[][];
   divBetween: number[][];
   splitBetween: number[][];
@@ -346,7 +376,7 @@ function simulatePortfolio(args: {
    *  initial seed (lump or first DCA installment). */
   contributions: number[];
 }): SimOutput {
-  const { weights, distributions, legTickers, rawCloses, divBetween, splitBetween, dates, rebalance, contributions } = args;
+  const { weights, distributions, legTickers, isDividendOnly, rawCloses, divBetween, splitBetween, dates, rebalance, contributions } = args;
   const nLegs = weights.length;
   const N = dates.length;
   const tickerIdx = new Map(legTickers.map((t, i) => [t, i]));
@@ -356,10 +386,11 @@ function simulatePortfolio(args: {
   const twrWealth = new Array(N).fill(1);
   const twrReturns: number[] = [];
 
-  // Day 0: deploy the seed contribution (lump amount or first DCA).
+  // Day 0: deploy the seed contribution into CORE legs only.
   let totalNominal = 0;
   if (contributions[0] > 0) {
     for (let j = 0; j < nLegs; j++) {
+      if (isDividendOnly[j]) continue;
       const p0 = rawCloses[j][0];
       if (p0 > 0 && Number.isFinite(p0)) {
         shares[j] = (contributions[0] * weights[j]) / p0;
@@ -405,10 +436,11 @@ function simulatePortfolio(args: {
     twrReturns.push(twrDaily);
     twrWealth[t] = twrWealth[t - 1] * (1 + twrDaily);
 
-    // 4) Today's contribution (if any), deployed at today's rawClose by weights.
+    // 4) Today's contribution (if any), deployed into CORE legs by weights.
     let totalAfter = preContribValue;
     if (contributions[t] > 0) {
       for (let j = 0; j < nLegs; j++) {
+        if (isDividendOnly[j]) continue;
         const px = rawCloses[j][t];
         if (px > 0 && Number.isFinite(px)) {
           shares[j] += (contributions[t] * weights[j]) / px;
@@ -417,12 +449,22 @@ function simulatePortfolio(args: {
       totalAfter += contributions[t];
     }
 
-    // 5) Period-boundary rebalance.
+    // 5) Period-boundary rebalance — CORE legs only. Dividend-only legs
+    //    keep their accumulated shares so they grow purely from routed cash.
     if (isNewPeriod(dates[t - 1], dates[t], rebalance) && totalAfter > 0) {
+      let coreTotal = 0;
       for (let j = 0; j < nLegs; j++) {
+        if (isDividendOnly[j]) continue;
         const px = rawCloses[j][t];
-        if (px > 0 && Number.isFinite(px)) {
-          shares[j] = (totalAfter * weights[j]) / px;
+        if (px > 0 && Number.isFinite(px)) coreTotal += shares[j] * px;
+      }
+      if (coreTotal > 0) {
+        for (let j = 0; j < nLegs; j++) {
+          if (isDividendOnly[j]) continue;
+          const px = rawCloses[j][t];
+          if (px > 0 && Number.isFinite(px)) {
+            shares[j] = (coreTotal * weights[j]) / px;
+          }
         }
       }
     }

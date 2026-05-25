@@ -71,6 +71,7 @@ interface DrawdownStats {
 interface LegStats {
   ticker: string;
   weight: number;
+  isDividendOnly: boolean;
   totalReturn: number;
   cagr: number;
   volAnnual: number;
@@ -538,62 +539,74 @@ export default function PortfolioAnalyzer() {
                       </div>
 
                       {l.divTargets.length === 0 ? (
-                        <div className="text-[11px] text-gray-500 px-1 py-0.5">
+                        <div className="text-[11px] text-gray-500 px-1 py-0.5 leading-relaxed">
                           기본: 이 종목에서 발생한 배당금은 자기 자신({l.ticker || "—"})으로
-                          100% 재투자됩니다.
+                          100% 재투자됩니다. 분배 대상으로 <b>포트폴리오에 없는
+                          종목</b>도 입력 가능 — 그 종목은 <b>배당으로만 누적되는 보조 자산</b>이
+                          되며 리밸런싱·신규 적립에서 제외됩니다.
                         </div>
                       ) : (
-                        l.divTargets.map((d) => (
-                          <div
-                            key={d.id}
-                            className="grid grid-cols-[1fr_100px_28px] gap-2 items-center"
-                          >
-                            <select
-                              value={d.ticker}
-                              onChange={(e) =>
-                                updateDivTarget(l.id, d.id, {
-                                  ticker: e.target.value,
-                                })
-                              }
-                              className="w-full rounded-md bg-bg-card border border-border-soft px-2 py-1 font-mono text-xs text-gray-100 uppercase"
+                        l.divTargets.map((d) => {
+                          const targetU = d.ticker.trim().toUpperCase();
+                          const isExtra =
+                            !!targetU && !legTickerOptions.includes(targetU);
+                          return (
+                            <div
+                              key={d.id}
+                              className="grid grid-cols-[1fr_100px_28px] gap-2 items-center"
                             >
-                              {legTickerOptions.length === 0 ? (
-                                <option value="">(종목 없음)</option>
-                              ) : (
-                                legTickerOptions.map((t) => (
-                                  <option key={t} value={t}>
-                                    {t}
-                                  </option>
-                                ))
-                              )}
-                            </select>
-                            <div className="relative">
-                              <input
-                                type="number"
-                                min={0}
-                                step={0.5}
-                                value={Number.isFinite(d.weight) ? d.weight : 0}
-                                onChange={(e) =>
-                                  updateDivTarget(l.id, d.id, {
-                                    weight: Number(e.target.value),
-                                  })
-                                }
-                                className="w-full rounded-md bg-bg-card border border-border-soft pl-2 pr-6 py-1 text-right text-gray-100 text-xs"
-                              />
-                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 pointer-events-none">
-                                %
-                              </span>
+                              <div className="relative">
+                                <TickerAutocomplete
+                                  mode="single"
+                                  value={d.ticker}
+                                  onChange={(v) =>
+                                    updateDivTarget(l.id, d.id, {
+                                      ticker: v.replace(/\s+/g, "").toUpperCase(),
+                                    })
+                                  }
+                                  placeholder="투자 외 종목도 가능"
+                                  inputId={`pf-div-${d.id}`}
+                                  className="w-full"
+                                  inputClassName={`w-full rounded-md bg-bg-card border ${
+                                    isExtra
+                                      ? "border-accent-blue/60 pr-16"
+                                      : "border-border-soft pr-2"
+                                  } pl-2 py-1 font-mono text-xs text-gray-100 uppercase`}
+                                />
+                                {isExtra ? (
+                                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-accent-blue pointer-events-none uppercase tracking-wide">
+                                    배당전용
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={0.5}
+                                  value={Number.isFinite(d.weight) ? d.weight : 0}
+                                  onChange={(e) =>
+                                    updateDivTarget(l.id, d.id, {
+                                      weight: Number(e.target.value),
+                                    })
+                                  }
+                                  className="w-full rounded-md bg-bg-card border border-border-soft pl-2 pr-6 py-1 text-right text-gray-100 text-xs"
+                                />
+                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 pointer-events-none">
+                                  %
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeDivTarget(l.id, d.id)}
+                                aria-label="배당 분배 제거"
+                                className="text-gray-500 hover:text-amber-400"
+                              >
+                                ×
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => removeDivTarget(l.id, d.id)}
-                              aria-label="배당 분배 제거"
-                              className="text-gray-500 hover:text-amber-400"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   ) : null}
@@ -989,8 +1002,21 @@ function Results({ data }: { data: ApiResponse }) {
             <tbody className="text-gray-200 font-mono">
               {data.legs.map((l) => (
                 <tr key={l.ticker} className="border-b border-border-soft/60">
-                  <td className="py-1.5 pr-3 text-gray-300">{l.ticker}</td>
-                  <td className="py-1.5 pr-3 text-right">{pct(l.weight, 1)}</td>
+                  <td className="py-1.5 pr-3 text-gray-300">
+                    {l.ticker}
+                    {l.isDividendOnly ? (
+                      <span className="ml-1 inline-block px-1 py-0 text-[9px] uppercase tracking-wide rounded border border-accent-blue/60 text-accent-blue font-sans">
+                        배당전용
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="py-1.5 pr-3 text-right">
+                    {l.isDividendOnly ? (
+                      <span className="text-gray-500">—</span>
+                    ) : (
+                      pct(l.weight, 1)
+                    )}
+                  </td>
                   <td className="py-1.5 pr-3 text-right">{pct(l.totalReturn)}</td>
                   <td className="py-1.5 pr-3 text-right">{pct(l.cagr)}</td>
                   <td className="py-1.5 pr-3 text-right">{pct(l.volAnnual)}</td>
@@ -1005,7 +1031,13 @@ function Results({ data }: { data: ApiResponse }) {
                   </td>
                   <td className="py-1.5 pr-3 text-right">{num(l.betaVsBench, 2)}</td>
                   <td className="py-1.5 pr-3 text-right">{num(l.corrVsBench, 2)}</td>
-                  <td className="py-1.5 text-right">{pp(l.contribution)}</td>
+                  <td className="py-1.5 text-right">
+                    {l.isDividendOnly ? (
+                      <span className="text-gray-500">—</span>
+                    ) : (
+                      pp(l.contribution)
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

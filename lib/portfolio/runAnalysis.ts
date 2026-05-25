@@ -180,7 +180,15 @@ export async function runPortfolioAnalysis(
   const benchRisk = riskAdjusted(composed.benchReturns, ddBench.mdd, riskFreeAnnual);
 
   const legBreakdown = composed.legs.map((l) =>
-    legStats(l.ticker, l.weight, l.closes, l.returns, composed.benchReturns, riskFreeAnnual),
+    legStats(
+      l.ticker,
+      l.weight,
+      l.isDividendOnly,
+      l.closes,
+      l.returns,
+      composed.benchReturns,
+      riskFreeAnnual,
+    ),
   );
 
   const corr = correlationMatrix(composed.legs, {

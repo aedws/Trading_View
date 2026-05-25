@@ -201,6 +201,8 @@ export function drawdownStatsFromWealth(
 export interface LegStats {
   ticker: string;
   weight: number;
+  /** True if the leg only exists as a dividend-distribution target. */
+  isDividendOnly: boolean;
   /** Total return over the window. */
   totalReturn: number;
   cagr: number;
@@ -220,6 +222,7 @@ const TRADING_DAYS_LEG = 252;
 export function legStats(
   ticker: string,
   weight: number,
+  isDividendOnly: boolean,
   legCloses: number[],
   legReturns: number[],
   benchReturns: number[],
@@ -269,6 +272,7 @@ export function legStats(
   return {
     ticker,
     weight,
+    isDividendOnly,
     totalReturn: tr,
     cagr: cg,
     volAnnual: vol,
