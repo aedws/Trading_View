@@ -952,14 +952,28 @@ function WealthChart({
             </text>
           </g>
         ))}
-        <path d={path("benchmark")} fill="none" stroke="#9ca3af" strokeWidth={1.4} strokeDasharray="3 3" />
+        <path d={path("benchmark")} fill="none" stroke="#cbd5e1" strokeWidth={1.4} strokeDasharray="4 3" />
         <path d={path("portfolio")} fill="none" stroke="#60a5fa" strokeWidth={1.8} />
-        <text x={pad.l + 4} y={pad.t + 12} fontSize={10} fill="#60a5fa">
-          ● 포트폴리오 ({series[lastIdx].portfolio.toFixed(3)}×)
-        </text>
-        <text x={pad.l + 4} y={pad.t + 26} fontSize={10} fill="#9ca3af">
-          ● {benchLabel} ({series[lastIdx].benchmark.toFixed(3)}×)
-        </text>
+        <g transform={`translate(${pad.l + 6}, ${pad.t + 10})`}>
+          <line x1={0} y1={0} x2={22} y2={0} stroke="#60a5fa" strokeWidth={2.2} />
+          <text x={28} y={3} fontSize={10} fill="#60a5fa">
+            포트폴리오 ({series[lastIdx].portfolio.toFixed(3)}×)
+          </text>
+        </g>
+        <g transform={`translate(${pad.l + 6}, ${pad.t + 24})`}>
+          <line
+            x1={0}
+            y1={0}
+            x2={22}
+            y2={0}
+            stroke="#cbd5e1"
+            strokeWidth={1.6}
+            strokeDasharray="4 3"
+          />
+          <text x={28} y={3} fontSize={10} fill="#cbd5e1">
+            {benchLabel} ({series[lastIdx].benchmark.toFixed(3)}×)
+          </text>
+        </g>
         <text x={pad.l} y={H - 6} fontSize={9} fill="#6b7280">
           {series[0].date}
         </text>
@@ -1019,14 +1033,28 @@ function DrawdownChart({
           </g>
         ))}
         <path d={area} fill="rgb(251 191 36 / 0.15)" stroke="none" />
-        <path d={path("benchmark")} fill="none" stroke="#9ca3af" strokeWidth={1.2} strokeDasharray="3 3" />
-        <path d={path("portfolio")} fill="none" stroke="#fbbf24" strokeWidth={1.6} />
-        <text x={pad.l + 4} y={pad.t + 12} fontSize={10} fill="#fbbf24">
-          ● 포트폴리오 낙폭
-        </text>
-        <text x={pad.l + 4} y={pad.t + 26} fontSize={10} fill="#9ca3af">
-          ● {benchLabel} 낙폭
-        </text>
+        <path d={path("benchmark")} fill="none" stroke="#cbd5e1" strokeWidth={1.4} strokeDasharray="4 3" />
+        <path d={path("portfolio")} fill="none" stroke="#fbbf24" strokeWidth={1.8} />
+        <g transform={`translate(${pad.l + 6}, ${pad.t + 10})`}>
+          <line x1={0} y1={0} x2={22} y2={0} stroke="#fbbf24" strokeWidth={2.2} />
+          <text x={28} y={3} fontSize={10} fill="#fbbf24">
+            포트폴리오 낙폭
+          </text>
+        </g>
+        <g transform={`translate(${pad.l + 6}, ${pad.t + 24})`}>
+          <line
+            x1={0}
+            y1={0}
+            x2={22}
+            y2={0}
+            stroke="#cbd5e1"
+            strokeWidth={1.6}
+            strokeDasharray="4 3"
+          />
+          <text x={28} y={3} fontSize={10} fill="#cbd5e1">
+            {benchLabel} 낙폭
+          </text>
+        </g>
       </svg>
     </div>
   );
