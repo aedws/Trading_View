@@ -51,3 +51,9 @@ export const MAX_DURATION_COVERED_CALL = envSeconds(
   "VERCEL_MAX_DURATION_COVERED_CALL",
   60
 );
+
+/** 포트폴리오 합성 분석 — 최대 10종목 + 벤치마크 병렬 호출 */
+export const MAX_DURATION_PORTFOLIO = envSeconds(
+  "VERCEL_MAX_DURATION_PORTFOLIO",
+  60,
+);

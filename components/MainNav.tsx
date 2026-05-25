@@ -13,6 +13,7 @@ export default function MainNav({ className = "" }: { className?: string }) {
   const onDash = pathname === "/" || pathname === "";
   const onBt = pathname === "/backtest";
   const onCc = pathname === "/covered-call";
+  const onPf = pathname === "/portfolio";
   return (
     <nav
       className={`flex items-center gap-1 rounded-lg border border-border bg-bg-soft p-0.5 shrink-0 ${className}`}
@@ -26,6 +27,9 @@ export default function MainNav({ className = "" }: { className?: string }) {
       </Link>
       <Link href="/covered-call" className={onCc ? active : inactive}>
         커버드콜 분석
+      </Link>
+      <Link href="/portfolio" className={onPf ? active : inactive}>
+        포트폴리오 분석
       </Link>
     </nav>
   );
