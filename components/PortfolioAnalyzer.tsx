@@ -6,12 +6,21 @@ import { TickerAutocomplete } from "@/components/bt/TickerAutocomplete";
 
 type Mode = "years" | "inception" | "custom";
 type Rebalance = "daily" | "weekly" | "monthly" | "yearly";
+type InvestMode = "lump" | "dca";
+type DcaFrequency = "weekly" | "biweekly" | "monthly" | "quarterly";
 
 const REBAL_LABEL: Record<Rebalance, string> = {
   daily: "일간 리밸런싱",
   weekly: "주간 리밸런싱",
   monthly: "월간 리밸런싱",
   yearly: "연간 리밸런싱",
+};
+
+const DCA_FREQ_LABEL: Record<DcaFrequency, string> = {
+  weekly: "매주",
+  biweekly: "격주",
+  monthly: "매월",
+  quarterly: "분기",
 };
 
 interface DividendTargetRow {
@@ -65,9 +74,33 @@ interface LegStats {
   totalReturn: number;
   cagr: number;
   volAnnual: number;
+  alphaVsBench: number;
   betaVsBench: number;
   corrVsBench: number;
   contribution: number;
+}
+
+interface CashSummary {
+  totalContributed: number;
+  portfolioFinalNominal: number;
+  benchmarkFinalNominal: number;
+  portfolioProfit: number;
+  benchmarkProfit: number;
+  portfolioXirr: number;
+  benchmarkXirr: number;
+}
+
+interface YearlyRow {
+  year: string;
+  portfolio: number;
+  benchmark: number;
+  alpha: number;
+}
+
+interface MonthlyCell {
+  year: number;
+  month: number;
+  portfolio: number;
 }
 
 interface ApiResponse {
@@ -77,6 +110,9 @@ interface ApiResponse {
   rebalance: Rebalance;
   riskFreeAnnual: number;
   benchmark: string;
+  investMode: InvestMode;
+  dcaFrequency: DcaFrequency | null;
+  dcaAmount: number | null;
   requestedRange: { start: string; end: string };
   effectiveRange: { start: string; end: string };
   bindingLeg: { ticker: string; firstDate: string } | null;
@@ -107,6 +143,9 @@ interface ApiResponse {
   correlation: { labels: string[]; values: number[][] };
   wealthSeries: Array<{ date: string; portfolio: number; benchmark: number }>;
   drawdownSeries: Array<{ date: string; portfolio: number; benchmark: number }>;
+  yearly: YearlyRow[];
+  monthlyHeatmap: { years: number[]; cells: MonthlyCell[] };
+  cash: CashSummary;
 }
 
 function pct(x: number, digits = 2): string {
@@ -168,6 +207,10 @@ export default function PortfolioAnalyzer() {
   const [bench, setBench] = useState("VOO");
   const [rebalance, setRebalance] = useState<Rebalance>("daily");
   const [riskFree, setRiskFree] = useState(4.5);
+  const [investMode, setInvestMode] = useState<InvestMode>("lump");
+  const [lumpAmount, setLumpAmount] = useState(10000);
+  const [dcaAmount, setDcaAmount] = useState(500);
+  const [dcaFreq, setDcaFreq] = useState<DcaFrequency>("monthly");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [data, setData] = useState<ApiResponse | null>(null);
@@ -295,6 +338,13 @@ export default function PortfolioAnalyzer() {
         end: mode === "custom" ? end : undefined,
         rebalance,
         riskFreeAnnual: Number.isFinite(riskFree) ? riskFree / 100 : 0.045,
+        investMode,
+        ...(investMode === "lump"
+          ? { lumpAmount: Number.isFinite(lumpAmount) ? lumpAmount : 1 }
+          : {
+              dcaAmount: Number.isFinite(dcaAmount) ? dcaAmount : 500,
+              dcaFrequency: dcaFreq,
+            }),
       };
       const res = await fetch("/api/portfolio", {
         method: "POST",
@@ -312,7 +362,20 @@ export default function PortfolioAnalyzer() {
     } finally {
       setLoading(false);
     }
-  }, [legs, bench, mode, years, start, end, rebalance, riskFree]);
+  }, [
+    legs,
+    bench,
+    mode,
+    years,
+    start,
+    end,
+    rebalance,
+    riskFree,
+    investMode,
+    lumpAmount,
+    dcaAmount,
+    dcaFreq,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -626,6 +689,92 @@ export default function PortfolioAnalyzer() {
           </label>
         </div>
 
+        <div className="rounded-lg border border-border-soft bg-bg-soft/40 p-3 space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-gray-400">투자 방식:</span>
+            <div
+              role="tablist"
+              aria-label="투자 방식 토글"
+              className="flex items-center rounded-md border border-border bg-bg-card p-0.5"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={investMode === "lump"}
+                onClick={() => setInvestMode("lump")}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded transition ${
+                  investMode === "lump"
+                    ? "bg-accent-blue text-white"
+                    : "text-gray-400 hover:text-gray-100"
+                }`}
+              >
+                거치식 (Lump-sum)
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={investMode === "dca"}
+                onClick={() => setInvestMode("dca")}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded transition ${
+                  investMode === "dca"
+                    ? "bg-accent-blue text-white"
+                    : "text-gray-400 hover:text-gray-100"
+                }`}
+              >
+                DCA (적립식)
+              </button>
+            </div>
+            <span className="text-[11px] text-gray-500">
+              {investMode === "lump"
+                ? "시작 시점에 일괄 투입. XIRR/MWR로 비교 가능."
+                : "주기마다 동일 금액을 매수. 각 회차는 그날 비중대로 배분."}
+            </span>
+          </div>
+
+          {investMode === "lump" ? (
+            <div className="grid sm:grid-cols-3 gap-3 text-sm">
+              <label className="space-y-1">
+                <span className="text-gray-500 text-[11px]">거치 금액 (USD)</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={100}
+                  value={lumpAmount}
+                  onChange={(e) => setLumpAmount(Number(e.target.value))}
+                  className="w-full rounded-lg bg-bg-card border border-border px-2 py-1.5 text-gray-100"
+                />
+              </label>
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-3 gap-3 text-sm">
+              <label className="space-y-1">
+                <span className="text-gray-500 text-[11px]">회당 금액 (USD)</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={50}
+                  value={dcaAmount}
+                  onChange={(e) => setDcaAmount(Number(e.target.value))}
+                  className="w-full rounded-lg bg-bg-card border border-border px-2 py-1.5 text-gray-100"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-gray-500 text-[11px]">DCA 주기</span>
+                <select
+                  value={dcaFreq}
+                  onChange={(e) => setDcaFreq(e.target.value as DcaFrequency)}
+                  className="w-full rounded-lg bg-bg-card border border-border px-2 py-1.5 text-gray-100"
+                >
+                  <option value="weekly">매주 (ISO 주 시작)</option>
+                  <option value="biweekly">격주</option>
+                  <option value="monthly">매월 (월초 거래일)</option>
+                  <option value="quarterly">분기 (분기초 거래일)</option>
+                </select>
+              </label>
+            </div>
+          )}
+        </div>
+
         <button
           type="button"
           onClick={() => void run()}
@@ -705,19 +854,58 @@ function Results({ data }: { data: ApiResponse }) {
             {data.startDate} ~ {data.endDate} · {data.tradingDays}거래일 ·
             벤치마크 <span className="text-gray-300">{data.benchmark}</span> ·{" "}
             {REBAL_LABEL[data.rebalance] ?? data.rebalance} · rf{" "}
-            {(data.riskFreeAnnual * 100).toFixed(2)}%
+            {(data.riskFreeAnnual * 100).toFixed(2)}% ·{" "}
+            {data.investMode === "lump"
+              ? "거치식"
+              : `DCA ${data.dcaFrequency ? DCA_FREQ_LABEL[data.dcaFrequency] : ""} · $${data.dcaAmount ?? "—"}`}
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-          <Metric label="총수익" value={pct(data.portfolio.totalReturn)} />
-          <Metric label="CAGR" value={pct(data.portfolio.cagr)} />
+          <Metric label="총수익 (TWR)" value={pct(data.portfolio.totalReturn)} />
+          <Metric label="CAGR (TWR)" value={pct(data.portfolio.cagr)} />
           <Metric label="연 변동성" value={pct(data.portfolio.volAnnual)} />
-          <Metric label="최종 자본" value={`${num(data.portfolio.finalWealth, 3)}×`} />
+          <Metric label="TWR 지수" value={`${num(data.portfolio.finalWealth, 3)}×`} />
           <Metric label="알파(연)" value={pct(data.capm.alpha)} accent="green" />
           <Metric label="베타" value={num(data.capm.beta, 2)} accent="blue" />
           <Metric label="R²" value={pct(data.capm.r2)} />
           <Metric label="MDD" value={pct(data.drawdown.portfolio.mdd)} accent="red" />
         </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-bg-card p-4 space-y-2">
+        <h3 className="text-sm font-medium text-gray-200">
+          {data.investMode === "dca" ? "DCA 자금흐름" : "거치식 자금흐름"}
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          <Metric label="총 납입" value={`$${num(data.cash.totalContributed, 0)}`} />
+          <Metric
+            label="포트 최종 평가액"
+            value={`$${num(data.cash.portfolioFinalNominal, 0)}`}
+          />
+          <Metric
+            label="포트 손익"
+            value={`$${num(data.cash.portfolioProfit, 0)}`}
+            accent={data.cash.portfolioProfit >= 0 ? "green" : "red"}
+          />
+          <Metric
+            label={`${data.benchmark} 최종`}
+            value={`$${num(data.cash.benchmarkFinalNominal, 0)}`}
+          />
+          <Metric
+            label="XIRR (포트)"
+            value={pct(data.cash.portfolioXirr)}
+            accent="green"
+          />
+          <Metric
+            label={`XIRR (${data.benchmark})`}
+            value={pct(data.cash.benchmarkXirr)}
+          />
+        </div>
+        <p className="text-[11px] text-gray-500 leading-relaxed">
+          XIRR(자금가중 수익률) = 모든 납입·평가액을 현금흐름으로 두고 푼 연환산
+          IRR. DCA에서는 TWR(CAGR)과 차이가 날 수 있으며, 실제 사용자의 자금
+          관점에서의 수익률을 더 잘 반영합니다.
+        </p>
       </section>
 
       <section className="rounded-xl border border-border bg-bg-card p-4 space-y-2">
@@ -782,7 +970,7 @@ function Results({ data }: { data: ApiResponse }) {
       </section>
 
       <section className="rounded-xl border border-border bg-bg-card p-4 space-y-2">
-        <h3 className="text-sm font-medium text-gray-200">자산별 상세</h3>
+        <h3 className="text-sm font-medium text-gray-200">자산별 상세 (α/β)</h3>
         <div className="overflow-x-auto text-xs">
           <table className="min-w-full border-collapse">
             <thead>
@@ -792,7 +980,8 @@ function Results({ data }: { data: ApiResponse }) {
                 <th className="py-2 pr-3 text-right">총수익</th>
                 <th className="py-2 pr-3 text-right">CAGR</th>
                 <th className="py-2 pr-3 text-right">연변동성</th>
-                <th className="py-2 pr-3 text-right">β (벤치)</th>
+                <th className="py-2 pr-3 text-right">α(연)</th>
+                <th className="py-2 pr-3 text-right">β</th>
                 <th className="py-2 pr-3 text-right">상관</th>
                 <th className="py-2 text-right">기여(w×TR)</th>
               </tr>
@@ -805,6 +994,15 @@ function Results({ data }: { data: ApiResponse }) {
                   <td className="py-1.5 pr-3 text-right">{pct(l.totalReturn)}</td>
                   <td className="py-1.5 pr-3 text-right">{pct(l.cagr)}</td>
                   <td className="py-1.5 pr-3 text-right">{pct(l.volAnnual)}</td>
+                  <td
+                    className={`py-1.5 pr-3 text-right ${
+                      Number.isFinite(l.alphaVsBench) && l.alphaVsBench >= 0
+                        ? "text-accent-green"
+                        : "text-amber-400"
+                    }`}
+                  >
+                    {pct(l.alphaVsBench)}
+                  </td>
                   <td className="py-1.5 pr-3 text-right">{num(l.betaVsBench, 2)}</td>
                   <td className="py-1.5 pr-3 text-right">{num(l.corrVsBench, 2)}</td>
                   <td className="py-1.5 text-right">{pp(l.contribution)}</td>
@@ -813,13 +1011,172 @@ function Results({ data }: { data: ApiResponse }) {
             </tbody>
           </table>
         </div>
+        <p className="text-[11px] text-gray-500">
+          α·β는 각 자산의 일간 초과수익(자산−rf) ↔ 벤치 초과수익(벤치−rf) CAPM
+          회귀. 양의 α = 베타 노출만으로 설명되지 않는 초과수익.
+        </p>
       </section>
+
+      <YearlyReturnsTable rows={data.yearly} benchLabel={data.benchmark} />
+
+      <MonthlyHeatmap data={data.monthlyHeatmap} />
 
       <section className="rounded-xl border border-border bg-bg-card p-4 space-y-2">
         <h3 className="text-sm font-medium text-gray-200">상관 행렬</h3>
         <CorrelationHeatmap matrix={data.correlation} />
       </section>
     </>
+  );
+}
+
+function YearlyReturnsTable({
+  rows,
+  benchLabel,
+}: {
+  rows: YearlyRow[];
+  benchLabel: string;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <section className="rounded-xl border border-border bg-bg-card p-4 space-y-2">
+      <h3 className="text-sm font-medium text-gray-200">연도별 수익률</h3>
+      <div className="overflow-x-auto text-xs">
+        <table className="min-w-full border-collapse">
+          <thead>
+            <tr className="text-left text-gray-500 border-b border-border-soft">
+              <th className="py-2 pr-3">연도</th>
+              <th className="py-2 pr-3 text-right">포트폴리오</th>
+              <th className="py-2 pr-3 text-right">{benchLabel}</th>
+              <th className="py-2 text-right">α (포트−벤치)</th>
+            </tr>
+          </thead>
+          <tbody className="text-gray-200 font-mono">
+            {rows.map((r) => (
+              <tr key={r.year} className="border-b border-border-soft/60">
+                <td className="py-1.5 pr-3 text-gray-300">{r.year}</td>
+                <td
+                  className={`py-1.5 pr-3 text-right ${
+                    r.portfolio >= 0 ? "text-gray-100" : "text-amber-400"
+                  }`}
+                >
+                  {pct(r.portfolio)}
+                </td>
+                <td
+                  className={`py-1.5 pr-3 text-right ${
+                    r.benchmark >= 0 ? "text-gray-100" : "text-amber-400"
+                  }`}
+                >
+                  {pct(r.benchmark)}
+                </td>
+                <td
+                  className={`py-1.5 text-right ${
+                    r.alpha >= 0 ? "text-accent-green" : "text-amber-400"
+                  }`}
+                >
+                  {pp(r.alpha)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function MonthlyHeatmap({
+  data,
+}: {
+  data: { years: number[]; cells: MonthlyCell[] };
+}) {
+  if (data.years.length === 0) return null;
+  const cellMap = new Map<string, number>();
+  for (const c of data.cells) cellMap.set(`${c.year}-${c.month}`, c.portfolio);
+  const yearCells = 13; // year label + 12 months
+  const cellW = 38;
+  const labelW = 56;
+  const cellH = 22;
+  const W = labelW + 12 * cellW;
+  const H = 22 + data.years.length * cellH;
+  function color(v: number): string {
+    if (!Number.isFinite(v)) return "rgb(31 41 55 / 0.5)";
+    const t = Math.max(-0.1, Math.min(0.1, v)) / 0.1; // saturate at ±10%
+    if (t >= 0) {
+      const a = 0.15 + 0.55 * t;
+      return `rgba(74, 222, 128, ${a.toFixed(3)})`;
+    }
+    const a = 0.15 + 0.55 * -t;
+    return `rgba(251, 113, 133, ${a.toFixed(3)})`;
+  }
+  const months = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
+  return (
+    <section className="rounded-xl border border-border bg-bg-card p-4 space-y-2">
+      <h3 className="text-sm font-medium text-gray-200">월별 수익 히트맵</h3>
+      <div className="w-full overflow-x-auto">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="h-auto"
+          style={{ maxWidth: `${W}px`, width: "100%" }}
+        >
+          {months.map((m, j) => (
+            <text
+              key={`m-${m}`}
+              x={labelW + j * cellW + cellW / 2}
+              y={14}
+              fontSize={10}
+              fill="#9ca3af"
+              textAnchor="middle"
+            >
+              {m}월
+            </text>
+          ))}
+          {data.years.map((y, i) => (
+            <g key={`y-${y}`}>
+              <text
+                x={labelW - 4}
+                y={22 + i * cellH + cellH / 2 + 3}
+                fontSize={10}
+                fill="#9ca3af"
+                textAnchor="end"
+              >
+                {y}
+              </text>
+              {months.map((_, j) => {
+                const m = j + 1;
+                const v = cellMap.get(`${y}-${m}`);
+                return (
+                  <g key={`c-${y}-${m}`}>
+                    <rect
+                      x={labelW + j * cellW}
+                      y={22 + i * cellH}
+                      width={cellW - 1}
+                      height={cellH - 1}
+                      fill={color(v ?? NaN)}
+                      stroke="rgb(31 41 55 / 0.8)"
+                    />
+                    <text
+                      x={labelW + j * cellW + cellW / 2}
+                      y={22 + i * cellH + cellH / 2 + 3}
+                      fontSize={9}
+                      fill="#e5e7eb"
+                      textAnchor="middle"
+                    >
+                      {Number.isFinite(v ?? NaN) ? `${((v ?? 0) * 100).toFixed(1)}` : ""}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+          ))}
+        </svg>
+      </div>
+      <p className="text-[10px] text-gray-500">
+        값 단위 %. 셀당 해당 월의 포트폴리오 TWR. 녹색 = 플러스, 분홍 = 마이너스 (±10% 포화).
+      </p>
+      <p className="text-[10px] text-gray-500">
+        {yearCells > 0 ? "" : ""}
+      </p>
+    </section>
   );
 }
 

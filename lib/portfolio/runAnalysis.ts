@@ -1,20 +1,22 @@
+import { computeXirr } from "@/lib/coveredCall/xirr";
 import type { FetchMode } from "@/lib/bt/yahoo";
 
 import {
   composePortfolio,
+  type DcaFrequency,
   type DividendTarget,
+  type InvestConfig,
+  type InvestMode,
   type LegInput,
   type RebalanceMode,
 } from "./composer";
 import {
   annualizedVol,
-  cagrFromWealth,
   capmStats,
   correlationMatrix,
   drawdownStatsFromWealth,
   legStats,
   riskAdjusted,
-  totalReturnFromWealth,
   type CapmStats,
   type CorrelationMatrix,
   type DrawdownStats,
@@ -31,6 +33,7 @@ export interface PortfolioAnalysisInput {
   end?: string;
   rebalance: RebalanceMode;
   riskFreeAnnual?: number;
+  invest: InvestConfig;
 }
 
 export interface SeriesPoint {
@@ -45,6 +48,30 @@ export interface DrawdownPoint {
   benchmark: number;
 }
 
+export interface YearlyRow {
+  year: string;
+  portfolio: number;
+  benchmark: number;
+  alpha: number; // port − bench
+}
+
+export interface MonthlyCell {
+  year: number;
+  month: number; // 1..12
+  portfolio: number;
+}
+
+export interface CashSummary {
+  totalContributed: number;
+  portfolioFinalNominal: number;
+  benchmarkFinalNominal: number;
+  portfolioProfit: number;
+  benchmarkProfit: number;
+  /** Money-weighted IRR (XIRR). */
+  portfolioXirr: number;
+  benchmarkXirr: number;
+}
+
 export interface PortfolioAnalysisResult {
   startDate: string;
   endDate: string;
@@ -52,6 +79,12 @@ export interface PortfolioAnalysisResult {
   rebalance: RebalanceMode;
   riskFreeAnnual: number;
   benchmark: string;
+
+  /** Selected investing scheme. */
+  investMode: InvestMode;
+  /** DCA frequency (when investMode === "dca"). */
+  dcaFrequency: DcaFrequency | null;
+  dcaAmount: number | null;
 
   /** Requested window (from input). */
   requestedRange: { start: string; end: string };
@@ -65,22 +98,19 @@ export interface PortfolioAnalysisResult {
   dividendRouting: Array<{
     ticker: string;
     targets: DividendTarget[];
-    /** Convenience: true if all weight goes back to the leg itself. */
     selfReinvest: boolean;
   }>;
 
   /** Portfolio: weights are normalized to sum to 1. */
   weights: Array<{ ticker: string; weight: number }>;
 
-  /** Headline portfolio numbers. */
+  /** Headline portfolio numbers (TWR-based). */
   portfolio: {
     totalReturn: number;
     cagr: number;
     volAnnual: number;
     finalWealth: number;
   };
-
-  /** Same numbers for the benchmark. */
   benchmarkStats: {
     totalReturn: number;
     cagr: number;
@@ -88,29 +118,26 @@ export interface PortfolioAnalysisResult {
     finalWealth: number;
   };
 
-  /** Alpha, beta, R², TE, IR, correlation, up/down capture, hit rate. */
   capm: CapmStats;
-
-  /** Risk-adjusted ratios for the portfolio. */
   risk: RiskAdjusted;
-
-  /** Risk-adjusted ratios for the benchmark — useful for side-by-side compare. */
   benchRisk: RiskAdjusted;
-
-  /** Drawdown summary for portfolio & benchmark. */
   drawdown: { portfolio: DrawdownStats; benchmark: DrawdownStats };
-
-  /** Per-leg breakdown. */
   legs: LegStats[];
-
-  /** Correlation matrix (legs + benchmark). */
   correlation: CorrelationMatrix;
 
-  /** Down-sampled wealth path (≤ ~250 points) for chart rendering. */
   wealthSeries: SeriesPoint[];
-
-  /** Down-sampled drawdown series. */
   drawdownSeries: DrawdownPoint[];
+
+  /** Per calendar year TWR returns for portfolio vs benchmark. */
+  yearly: YearlyRow[];
+  /** Monthly portfolio TWR returns shaped for a heatmap (year × month). */
+  monthlyHeatmap: {
+    years: number[]; // sorted asc
+    cells: MonthlyCell[]; // sparse list — UI fills NaN for missing months
+  };
+
+  /** Nominal cash flow summary (always defined; meaningful for DCA). */
+  cash: CashSummary;
 }
 
 const TRADING_DAYS = 252;
@@ -131,31 +158,35 @@ export async function runPortfolioAnalysis(
     start: input.start,
     end: input.end,
     rebalance: input.rebalance,
+    invest: input.invest,
   });
 
   const startDate = composed.dates[0];
   const endDate = composed.dates[composed.dates.length - 1];
 
-  const portTr = totalReturnFromWealth(composed.portWealth);
-  const portCagr = cagrFromWealth(composed.portWealth);
+  const portTr = totalReturnFromTwr(composed.portReturns);
+  const portCagr = cagrFromTwr(composed.portReturns);
   const portVol = annualizedVol(composed.portReturns);
-  const benchTr = totalReturnFromWealth(composed.benchWealth);
-  const benchCagr = cagrFromWealth(composed.benchWealth);
-  const benchVol = annualizedVol(composed.bench.returns);
+  const benchTr = totalReturnFromTwr(composed.benchReturns);
+  const benchCagr = cagrFromTwr(composed.benchReturns);
+  const benchVol = annualizedVol(composed.benchReturns);
 
-  const capm = capmStats(composed.portReturns, composed.bench.returns, riskFreeAnnual);
+  const capm = capmStats(composed.portReturns, composed.benchReturns, riskFreeAnnual);
 
   const ddPort = drawdownStatsFromWealth(composed.portWealth, composed.dates);
   const ddBench = drawdownStatsFromWealth(composed.benchWealth, composed.dates);
 
   const risk = riskAdjusted(composed.portReturns, ddPort.mdd, riskFreeAnnual);
-  const benchRisk = riskAdjusted(composed.bench.returns, ddBench.mdd, riskFreeAnnual);
+  const benchRisk = riskAdjusted(composed.benchReturns, ddBench.mdd, riskFreeAnnual);
 
   const legBreakdown = composed.legs.map((l) =>
-    legStats(l.ticker, l.weight, l.closes, l.returns, composed.bench.returns),
+    legStats(l.ticker, l.weight, l.closes, l.returns, composed.benchReturns, riskFreeAnnual),
   );
 
-  const corr = correlationMatrix(composed.legs, composed.bench);
+  const corr = correlationMatrix(composed.legs, {
+    ticker: composed.bench.ticker,
+    returns: composed.benchReturns,
+  });
 
   const wealthSeries = downsampleWealth(
     composed.dates,
@@ -177,6 +208,18 @@ export async function runPortfolioAnalysis(
       Math.abs(l.dividendDistribution[0].weight - 1) < 1e-9,
   }));
 
+  // Yearly + monthly returns from TWR daily returns.
+  const yearly = yearlyReturns(
+    composed.dates,
+    composed.portReturns,
+    composed.benchReturns,
+  );
+  const monthlyHeatmap = monthlyReturnsHeatmap(composed.dates, composed.portReturns);
+
+  // XIRR (money-weighted) from nominal cash flows.
+  const portXirr = computeXirr(composed.portFlows);
+  const benchXirr = computeXirr(composed.benchFlows);
+
   return {
     startDate,
     endDate,
@@ -184,6 +227,10 @@ export async function runPortfolioAnalysis(
     rebalance: composed.rebalance,
     riskFreeAnnual,
     benchmark: composed.bench.ticker,
+    investMode: composed.investMode,
+    dcaFrequency:
+      input.invest.mode === "dca" ? input.invest.dcaFrequency ?? null : null,
+    dcaAmount: input.invest.mode === "dca" ? input.invest.dcaAmount ?? null : null,
     requestedRange: composed.requestedRange,
     effectiveRange: composed.effectiveRange,
     bindingLeg: composed.bindingLeg,
@@ -213,6 +260,96 @@ export async function runPortfolioAnalysis(
     correlation: corr,
     wealthSeries,
     drawdownSeries,
+    yearly,
+    monthlyHeatmap,
+    cash: {
+      totalContributed: composed.totalContributed,
+      portfolioFinalNominal:
+        composed.portNominalWealth[composed.portNominalWealth.length - 1],
+      benchmarkFinalNominal:
+        composed.benchNominalWealth[composed.benchNominalWealth.length - 1],
+      portfolioProfit:
+        composed.portNominalWealth[composed.portNominalWealth.length - 1] -
+        composed.totalContributed,
+      benchmarkProfit:
+        composed.benchNominalWealth[composed.benchNominalWealth.length - 1] -
+        composed.totalContributed,
+      portfolioXirr: portXirr,
+      benchmarkXirr: benchXirr,
+    },
+  };
+}
+
+/* ──────────── TWR aggregates ──────────── */
+
+function totalReturnFromTwr(returns: number[]): number {
+  if (returns.length === 0) return NaN;
+  let prod = 1;
+  for (const r of returns) prod *= 1 + (Number.isFinite(r) ? r : 0);
+  return prod - 1;
+}
+
+function cagrFromTwr(returns: number[]): number {
+  if (returns.length === 0) return NaN;
+  let sumLog = 0;
+  for (const r of returns) {
+    const x = 1 + (Number.isFinite(r) ? r : 0);
+    if (x > 0) sumLog += Math.log(x);
+  }
+  const years = returns.length / TRADING_DAYS;
+  if (years <= 0) return NaN;
+  return Math.exp(sumLog / years) - 1;
+}
+
+/* ──────────── yearly / monthly aggregations ──────────── */
+
+function yearlyReturns(
+  dates: string[],
+  portReturns: number[],
+  benchReturns: number[],
+): YearlyRow[] {
+  const map = new Map<string, { p: number; b: number }>();
+  for (let i = 0; i < portReturns.length; i++) {
+    const iso = dates[i + 1] ?? dates[i];
+    const y = iso.slice(0, 4);
+    const cur = map.get(y) ?? { p: 1, b: 1 };
+    cur.p *= 1 + (Number.isFinite(portReturns[i]) ? portReturns[i] : 0);
+    cur.b *= 1 + (Number.isFinite(benchReturns[i]) ? benchReturns[i] : 0);
+    map.set(y, cur);
+  }
+  const years = [...map.keys()].sort();
+  return years.map((y) => {
+    const { p, b } = map.get(y)!;
+    const port = p - 1;
+    const bench = b - 1;
+    return { year: y, portfolio: port, benchmark: bench, alpha: port - bench };
+  });
+}
+
+function monthlyReturnsHeatmap(
+  dates: string[],
+  portReturns: number[],
+): { years: number[]; cells: MonthlyCell[] } {
+  const map = new Map<string, number>();
+  for (let i = 0; i < portReturns.length; i++) {
+    const iso = dates[i + 1] ?? dates[i];
+    const key = iso.slice(0, 7); // YYYY-MM
+    const grow = 1 + (Number.isFinite(portReturns[i]) ? portReturns[i] : 0);
+    map.set(key, (map.get(key) ?? 1) * grow);
+  }
+  const cells: MonthlyCell[] = [];
+  const yearSet = new Set<number>();
+  for (const [key, prod] of map.entries()) {
+    const y = parseInt(key.slice(0, 4), 10);
+    const m = parseInt(key.slice(5, 7), 10);
+    yearSet.add(y);
+    cells.push({ year: y, month: m, portfolio: prod - 1 });
+  }
+  return {
+    years: [...yearSet].sort((a, b) => a - b),
+    cells: cells.sort((a, b) =>
+      a.year === b.year ? a.month - b.month : a.year - b.year,
+    ),
   };
 }
 
@@ -276,6 +413,3 @@ function drawdownSeries(wealth: number[]): number[] {
   }
   return out;
 }
-
-// Silence unused-import warnings if any tooling expects TRADING_DAYS here.
-void TRADING_DAYS;

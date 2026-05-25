@@ -3,6 +3,23 @@ import { fetchPricesCached } from "@/lib/bt/priceCache";
 import type { DividendEvent, FetchMode, SplitEvent } from "@/lib/bt/yahoo";
 
 export type RebalanceMode = "daily" | "weekly" | "monthly" | "yearly";
+export type InvestMode = "lump" | "dca";
+export type DcaFrequency = "weekly" | "biweekly" | "monthly" | "quarterly";
+
+export interface InvestConfig {
+  mode: InvestMode;
+  /** Initial lump-sum amount (default 1). Ignored for DCA. */
+  lumpAmount?: number;
+  /** Required when mode === "dca". USD per contribution period. */
+  dcaAmount?: number;
+  /** Required when mode === "dca". */
+  dcaFrequency?: DcaFrequency;
+}
+
+export interface CashFlow {
+  date: string;
+  amount: number;
+}
 
 export interface DividendTarget {
   /** Target ticker (must be one of the portfolio legs). */
@@ -42,12 +59,14 @@ export interface ComposedSeries {
   legs: LegSeries[];
   /** Benchmark series aligned to `dates`. */
   bench: { ticker: string; closes: number[]; returns: number[] };
-  /** Portfolio daily simple return series under chosen rebalance rule. */
+  /** Portfolio daily TWR return series (excludes contribution-day cash add). */
   portReturns: number[];
-  /** Portfolio wealth path normalized to start at 1.0. */
+  /** Portfolio TWR-index wealth path normalized to start at 1.0. */
   portWealth: number[];
-  /** Benchmark wealth path normalized to start at 1.0. */
+  /** Benchmark TWR-index wealth path normalized to start at 1.0. */
   benchWealth: number[];
+  /** Benchmark daily TWR return series. */
+  benchReturns: number[];
   rebalance: RebalanceMode;
   /** Requested span (from input args). */
   requestedRange: { start: string; end: string };
@@ -55,6 +74,21 @@ export interface ComposedSeries {
   effectiveRange: { start: string; end: string };
   /** Which leg's listing date is forcing the start (=oldest first-bar). */
   bindingLeg: { ticker: string; firstDate: string } | null;
+
+  /** Selected investing scheme (lump-sum vs DCA). */
+  investMode: InvestMode;
+  /** Nominal wealth path of the portfolio (includes contributions). */
+  portNominalWealth: number[];
+  /** Nominal wealth path of the benchmark. */
+  benchNominalWealth: number[];
+  /** Cash contribution amount on each date (0 = none). */
+  contributions: number[];
+  /** Total amount contributed over the window. */
+  totalContributed: number;
+  /** XIRR-ready cash flows for the portfolio (negative=contribution, +final). */
+  portFlows: CashFlow[];
+  /** XIRR-ready cash flows for the benchmark. */
+  benchFlows: CashFlow[];
 }
 
 /**
@@ -81,6 +115,7 @@ export async function composePortfolio(args: {
   start?: string;
   end?: string;
   rebalance: RebalanceMode;
+  invest: InvestConfig;
 }): Promise<ComposedSeries> {
   if (args.legs.length === 0) {
     throw new Error("최소 1개 종목이 필요합니다.");
@@ -168,8 +203,22 @@ export async function composePortfolio(args: {
     firstDate: legFirstDates[i],
     dividendDistribution: l.dividendDistribution,
   }));
-  const benchReturns = simpleDailyReturns(benchClosesAligned);
 
+  // Build DCA contribution schedule (per-date amount; 0 means no contribution).
+  const lumpAmount = args.invest.lumpAmount ?? 1;
+  const dcaAmount = args.invest.dcaAmount ?? 0;
+  const dcaSchedule =
+    args.invest.mode === "dca" && args.invest.dcaFrequency && dcaAmount > 0
+      ? buildDcaSchedule(dates, args.invest.dcaFrequency)
+      : null;
+  const contributions = new Array(dates.length).fill(0);
+  if (args.invest.mode === "lump") {
+    contributions[0] = lumpAmount;
+  } else if (dcaSchedule) {
+    for (const idx of dcaSchedule) contributions[idx] = dcaAmount;
+  }
+
+  // Portfolio simulator (legs, dividend routing, rebalancing).
   const sim = simulatePortfolio({
     weights: normLegs.map((l) => l.weight),
     distributions: normLegs.map((l) => l.dividendDistribution),
@@ -179,11 +228,20 @@ export async function composePortfolio(args: {
     splitBetween: legSplitBetween,
     dates,
     rebalance: args.rebalance,
+    contributions,
   });
 
-  const portWealth = sim.wealth;
-  const portReturns = returnsFromWealth(portWealth);
-  const benchWealth = wealthFromReturns(benchReturns);
+  // Benchmark — same contribution schedule, single asset, no rebal/dist routing.
+  const benchSim = simulateSingleAsset({
+    closes: benchClosesAligned,
+    contributions,
+    dates,
+  });
+
+  const portReturns = sim.twrReturns;
+  const portWealth = sim.twrWealth;
+  const benchReturns = benchSim.twrReturns;
+  const benchWealth = benchSim.twrWealth;
 
   const requestedStart =
     args.mode === "custom"
@@ -193,6 +251,22 @@ export async function composePortfolio(args: {
         : "";
   const requestedEnd =
     args.mode === "custom" ? args.end ?? "" : toIso(new Date());
+
+  // Build XIRR-style flows for portfolio and benchmark.
+  const finalPortNominal = sim.nominalWealth[sim.nominalWealth.length - 1];
+  const finalBenchNominal = benchSim.nominalWealth[benchSim.nominalWealth.length - 1];
+  const portFlows: CashFlow[] = [];
+  const benchFlows: CashFlow[] = [];
+  for (let t = 0; t < dates.length; t++) {
+    if (contributions[t] > 0) {
+      portFlows.push({ date: dates[t], amount: -contributions[t] });
+      benchFlows.push({ date: dates[t], amount: -contributions[t] });
+    }
+  }
+  portFlows.push({ date: dates[dates.length - 1], amount: finalPortNominal });
+  benchFlows.push({ date: dates[dates.length - 1], amount: finalBenchNominal });
+
+  const totalContributed = contributions.reduce((s, x) => s + x, 0);
 
   return {
     dates,
@@ -205,10 +279,18 @@ export async function composePortfolio(args: {
     portReturns,
     portWealth,
     benchWealth,
+    benchReturns,
     rebalance: args.rebalance,
     requestedRange: { start: requestedStart, end: requestedEnd },
     effectiveRange: { start: dates[0], end: dates[dates.length - 1] },
     bindingLeg,
+    investMode: args.invest.mode,
+    portNominalWealth: sim.nominalWealth,
+    benchNominalWealth: benchSim.nominalWealth,
+    contributions,
+    totalContributed,
+    portFlows,
+    benchFlows,
   };
 }
 
@@ -242,6 +324,15 @@ function resolveDistribution(
 
 /* ───────────────── share-based simulator ───────────────── */
 
+interface SimOutput {
+  /** Daily time-weighted return (excludes contribution-day cash addition). */
+  twrReturns: number[];
+  /** TWR index (starts at 1.0, compounds twrReturns). */
+  twrWealth: number[];
+  /** Nominal wealth (includes contributions). */
+  nominalWealth: number[];
+}
+
 function simulatePortfolio(args: {
   weights: number[];
   distributions: DividendTarget[][];
@@ -251,24 +342,33 @@ function simulatePortfolio(args: {
   splitBetween: number[][];
   dates: string[];
   rebalance: RebalanceMode;
-}): { wealth: number[] } {
-  const { weights, distributions, legTickers, rawCloses, divBetween, splitBetween, dates, rebalance } = args;
+  /** Cash contribution at each date (0 = none). contributions[0] is the
+   *  initial seed (lump or first DCA installment). */
+  contributions: number[];
+}): SimOutput {
+  const { weights, distributions, legTickers, rawCloses, divBetween, splitBetween, dates, rebalance, contributions } = args;
   const nLegs = weights.length;
   const N = dates.length;
   const tickerIdx = new Map(legTickers.map((t, i) => [t, i]));
 
-  // Initial allocation at dates[0] using rawClose[0].
-  const TOTAL0 = 1.0;
   const shares = new Array(nLegs).fill(0);
-  for (let j = 0; j < nLegs; j++) {
-    const p0 = rawCloses[j][0];
-    if (p0 > 0 && Number.isFinite(p0)) {
-      shares[j] = (TOTAL0 * weights[j]) / p0;
-    }
-  }
+  const nominalWealth = new Array(N).fill(0);
+  const twrWealth = new Array(N).fill(1);
+  const twrReturns: number[] = [];
 
-  const wealth = new Array(N).fill(0);
-  wealth[0] = TOTAL0;
+  // Day 0: deploy the seed contribution (lump amount or first DCA).
+  let totalNominal = 0;
+  if (contributions[0] > 0) {
+    for (let j = 0; j < nLegs; j++) {
+      const p0 = rawCloses[j][0];
+      if (p0 > 0 && Number.isFinite(p0)) {
+        shares[j] = (contributions[0] * weights[j]) / p0;
+      }
+    }
+    totalNominal = contributions[0];
+  }
+  nominalWealth[0] = totalNominal;
+  twrWealth[0] = 1;
 
   for (let t = 1; t < N; t++) {
     // 1) Splits accumulated in (dates[t-1], dates[t]].
@@ -278,8 +378,6 @@ function simulatePortfolio(args: {
     }
 
     // 2) Dividends accumulated in (dates[t-1], dates[t]].
-    //    Use t's rawClose for deploying the cash. Per-leg cash bucket is
-    //    routed independently per its own distribution config.
     for (let j = 0; j < nLegs; j++) {
       const perShare = divBetween[j][t];
       if (perShare <= 0) continue;
@@ -295,28 +393,122 @@ function simulatePortfolio(args: {
       }
     }
 
-    // 3) Compute total value at price[t].
-    let total = 0;
+    // 3) Value BEFORE today's contribution (drives TWR).
+    let preContribValue = 0;
     for (let j = 0; j < nLegs; j++) {
       const px = rawCloses[j][t];
-      if (px > 0 && Number.isFinite(px)) total += shares[j] * px;
+      if (px > 0 && Number.isFinite(px)) preContribValue += shares[j] * px;
     }
+    const prevNominal = totalNominal;
+    const twrDaily =
+      prevNominal > 0 ? preContribValue / prevNominal - 1 : 0;
+    twrReturns.push(twrDaily);
+    twrWealth[t] = twrWealth[t - 1] * (1 + twrDaily);
 
-    // 4) Period-boundary rebalance: snap shares to target weights.
-    if (isNewPeriod(dates[t - 1], dates[t], rebalance)) {
+    // 4) Today's contribution (if any), deployed at today's rawClose by weights.
+    let totalAfter = preContribValue;
+    if (contributions[t] > 0) {
       for (let j = 0; j < nLegs; j++) {
         const px = rawCloses[j][t];
         if (px > 0 && Number.isFinite(px)) {
-          shares[j] = (total * weights[j]) / px;
+          shares[j] += (contributions[t] * weights[j]) / px;
+        }
+      }
+      totalAfter += contributions[t];
+    }
+
+    // 5) Period-boundary rebalance.
+    if (isNewPeriod(dates[t - 1], dates[t], rebalance) && totalAfter > 0) {
+      for (let j = 0; j < nLegs; j++) {
+        const px = rawCloses[j][t];
+        if (px > 0 && Number.isFinite(px)) {
+          shares[j] = (totalAfter * weights[j]) / px;
         }
       }
     }
 
-    wealth[t] = total > 0 ? total : wealth[t - 1];
+    totalNominal = totalAfter > 0 ? totalAfter : prevNominal;
+    nominalWealth[t] = totalNominal;
   }
 
-  // Normalize so wealth starts at 1.0 — already does since TOTAL0=1.
-  return { wealth };
+  return { twrReturns, twrWealth, nominalWealth };
+}
+
+function simulateSingleAsset(args: {
+  closes: number[];
+  contributions: number[];
+  dates: string[];
+}): SimOutput {
+  const { closes, contributions } = args;
+  const N = closes.length;
+  let shares = 0;
+  let totalNominal = 0;
+  if (contributions[0] > 0 && closes[0] > 0) {
+    shares = contributions[0] / closes[0];
+    totalNominal = contributions[0];
+  }
+  const nominalWealth = new Array(N).fill(0);
+  const twrWealth = new Array(N).fill(1);
+  const twrReturns: number[] = [];
+  nominalWealth[0] = totalNominal;
+
+  for (let t = 1; t < N; t++) {
+    const px = closes[t];
+    const preContrib = px > 0 ? shares * px : totalNominal;
+    const prevNominal = totalNominal;
+    const r = prevNominal > 0 ? preContrib / prevNominal - 1 : 0;
+    twrReturns.push(r);
+    twrWealth[t] = twrWealth[t - 1] * (1 + r);
+    let totalAfter = preContrib;
+    if (contributions[t] > 0 && px > 0) {
+      shares += contributions[t] / px;
+      totalAfter += contributions[t];
+    }
+    totalNominal = totalAfter > 0 ? totalAfter : prevNominal;
+    nominalWealth[t] = totalNominal;
+  }
+  return { twrReturns, twrWealth, nominalWealth };
+}
+
+/* ───────────────── DCA schedule ───────────────── */
+
+/**
+ * Returns the indices into `dates` corresponding to the first trading day of
+ * each DCA period (always includes index 0). For "biweekly" this groups ISO
+ * weeks into pairs starting from the first analysis week.
+ */
+function buildDcaSchedule(dates: string[], freq: DcaFrequency): number[] {
+  if (dates.length === 0) return [];
+  const out: number[] = [0];
+  let lastKey = dcaPeriodKey(dates[0], freq, dates[0]);
+  for (let i = 1; i < dates.length; i++) {
+    const key = dcaPeriodKey(dates[i], freq, dates[0]);
+    if (key !== lastKey) {
+      out.push(i);
+      lastKey = key;
+    }
+  }
+  return out;
+}
+
+function dcaPeriodKey(iso: string, freq: DcaFrequency, anchorIso: string): string {
+  if (freq === "monthly") return iso.slice(0, 7);
+  if (freq === "quarterly") {
+    const y = iso.slice(0, 4);
+    const m = parseInt(iso.slice(5, 7), 10);
+    const q = Math.floor((m - 1) / 3);
+    return `${y}-Q${q}`;
+  }
+  if (freq === "weekly") {
+    return isoWeekKey(new Date(iso + "T00:00:00Z"));
+  }
+  // biweekly: bucket by week count since anchor, /2.
+  const anchor = new Date(anchorIso + "T00:00:00Z");
+  const today = new Date(iso + "T00:00:00Z");
+  const weeks = Math.floor(
+    (today.getTime() - anchor.getTime()) / (7 * 86400000),
+  );
+  return `BW-${Math.floor(weeks / 2)}`;
 }
 
 /* ───────────────── alignment helpers ───────────────── */
@@ -439,30 +631,6 @@ function simpleDailyReturns(closes: number[]): number[] {
     } else {
       out.push(NaN);
     }
-  }
-  return out;
-}
-
-function returnsFromWealth(wealth: number[]): number[] {
-  const out: number[] = [];
-  for (let i = 1; i < wealth.length; i++) {
-    const a = wealth[i - 1];
-    const b = wealth[i];
-    if (a > 0 && Number.isFinite(a) && Number.isFinite(b)) {
-      out.push(b / a - 1);
-    } else {
-      out.push(0);
-    }
-  }
-  return out;
-}
-
-function wealthFromReturns(returns: number[]): number[] {
-  const out: number[] = [1];
-  let w = 1;
-  for (const r of returns) {
-    w *= 1 + (Number.isFinite(r) ? r : 0);
-    out.push(w);
   }
   return out;
 }

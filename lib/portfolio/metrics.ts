@@ -205,14 +205,17 @@ export interface LegStats {
   totalReturn: number;
   cagr: number;
   volAnnual: number;
+  /** Annualized CAPM alpha vs the benchmark (intercept × 252). */
+  alphaVsBench: number;
   /** Beta of the leg vs the benchmark. */
   betaVsBench: number;
   /** Correlation with benchmark. */
   corrVsBench: number;
-  /** Approximate contribution to total portfolio return:
-   *  w_i × geometric return of leg (drift) or weight × leg return (rebal). */
+  /** Approximate contribution to total portfolio return: w_i × leg TR. */
   contribution: number;
 }
+
+const TRADING_DAYS_LEG = 252;
 
 export function legStats(
   ticker: string,
@@ -220,12 +223,14 @@ export function legStats(
   legCloses: number[],
   legReturns: number[],
   benchReturns: number[],
+  riskFreeAnnual = 0.045,
 ): LegStats {
   const legWealth = wealthFromReturnsLocal(legReturns);
   const tr = totalReturnFromWealth(legWealth);
   const cg = cagrFromWealth(legWealth);
   const vol = annualizedVol(legReturns);
 
+  const rfDaily = riskFreeAnnual / TRADING_DAYS_LEG;
   const n = Math.min(legReturns.length, benchReturns.length);
   let mp = 0;
   let mb = 0;
@@ -234,8 +239,8 @@ export function legStats(
     const r = legReturns[i];
     const rb = benchReturns[i];
     if (Number.isFinite(r) && Number.isFinite(rb)) {
-      mp += r;
-      mb += rb;
+      mp += r - rfDaily;
+      mb += rb - rfDaily;
       count++;
     }
   }
@@ -248,17 +253,18 @@ export function legStats(
     const r = legReturns[i];
     const rb = benchReturns[i];
     if (Number.isFinite(r) && Number.isFinite(rb)) {
-      const dp = r - mp;
-      const db = rb - mb;
+      const dp = r - rfDaily - mp;
+      const db = rb - rfDaily - mb;
       sbb += db * db;
       spb += db * dp;
       spp += dp * dp;
     }
   }
   const beta = sbb > 0 ? spb / sbb : NaN;
+  const alphaDaily = mp - beta * mb;
+  const alpha = Number.isFinite(alphaDaily) ? alphaDaily * TRADING_DAYS_LEG : NaN;
   const corr = spp > 0 && sbb > 0 ? spb / Math.sqrt(spp * sbb) : NaN;
-  // Avoid unused-variable lint while documenting that closes are not used.
-  void legCloses;
+  void legCloses; // not used directly; kept in signature for clarity
 
   return {
     ticker,
@@ -266,6 +272,7 @@ export function legStats(
     totalReturn: tr,
     cagr: cg,
     volAnnual: vol,
+    alphaVsBench: alpha,
     betaVsBench: beta,
     corrVsBench: corr,
     contribution: weight * tr,

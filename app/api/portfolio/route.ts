@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 
-import type { LegInput, RebalanceMode } from "@/lib/portfolio/composer";
+import type {
+  DcaFrequency,
+  InvestConfig,
+  InvestMode,
+  LegInput,
+  RebalanceMode,
+} from "@/lib/portfolio/composer";
 import { runPortfolioAnalysis } from "@/lib/portfolio/runAnalysis";
 import { MAX_DURATION_PORTFOLIO } from "@/lib/vercelMaxDuration";
 
@@ -10,6 +16,8 @@ export const maxDuration = MAX_DURATION_PORTFOLIO;
 
 const ALLOWED_MODE = ["years", "inception", "custom"] as const;
 const ALLOWED_REBAL = ["daily", "weekly", "monthly", "yearly"] as const;
+const ALLOWED_INVEST = ["lump", "dca"] as const;
+const ALLOWED_DCA_FREQ = ["weekly", "biweekly", "monthly", "quarterly"] as const;
 
 export async function POST(req: Request) {
   let body: Record<string, unknown>;
@@ -96,6 +104,46 @@ export async function POST(req: Request) {
       ? (body.riskFreeAnnual as number)
       : 0.045;
 
+  // Invest config: lump-sum or DCA.
+  const investModeRaw = String(body.investMode ?? "lump");
+  if (!ALLOWED_INVEST.includes(investModeRaw as InvestMode)) {
+    return NextResponse.json(
+      { error: `investMode must be one of ${ALLOWED_INVEST.join(", ")}` },
+      { status: 400 },
+    );
+  }
+  const investMode = investModeRaw as InvestMode;
+
+  let invest: InvestConfig;
+  if (investMode === "lump") {
+    const lumpAmount = Number(body.lumpAmount);
+    invest = {
+      mode: "lump",
+      lumpAmount:
+        Number.isFinite(lumpAmount) && lumpAmount > 0 ? lumpAmount : 1,
+    };
+  } else {
+    const dcaAmount = Number(body.dcaAmount);
+    const dcaFreqRaw = String(body.dcaFrequency ?? "monthly");
+    if (!Number.isFinite(dcaAmount) || dcaAmount <= 0) {
+      return NextResponse.json(
+        { error: "dcaAmount must be a positive number for DCA." },
+        { status: 400 },
+      );
+    }
+    if (!ALLOWED_DCA_FREQ.includes(dcaFreqRaw as DcaFrequency)) {
+      return NextResponse.json(
+        { error: `dcaFrequency must be one of ${ALLOWED_DCA_FREQ.join(", ")}` },
+        { status: 400 },
+      );
+    }
+    invest = {
+      mode: "dca",
+      dcaAmount,
+      dcaFrequency: dcaFreqRaw as DcaFrequency,
+    };
+  }
+
   try {
     const result = await runPortfolioAnalysis({
       legs,
@@ -106,6 +154,7 @@ export async function POST(req: Request) {
       end,
       rebalance,
       riskFreeAnnual,
+      invest,
     });
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
