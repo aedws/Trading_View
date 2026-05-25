@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = MAX_DURATION_PORTFOLIO;
 
 const ALLOWED_MODE = ["years", "inception", "custom"] as const;
-const ALLOWED_REBAL = ["daily", "none"] as const;
+const ALLOWED_REBAL = ["daily", "weekly", "monthly", "yearly"] as const;
 
 export async function POST(req: Request) {
   let body: Record<string, unknown>;

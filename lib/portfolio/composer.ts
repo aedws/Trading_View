@@ -2,7 +2,7 @@ import type { PricePoint } from "@/lib/bt/backtest";
 import { fetchPricesCached } from "@/lib/bt/priceCache";
 import type { FetchMode } from "@/lib/bt/yahoo";
 
-export type RebalanceMode = "daily" | "none";
+export type RebalanceMode = "daily" | "weekly" | "monthly" | "yearly";
 
 export interface LegInput {
   ticker: string;
@@ -41,10 +41,12 @@ export interface ComposedSeries {
  *
  * Conventions:
  *  - Adjusted close is used everywhere → returns include dividends.
- *  - "daily" rebalance: r_p[t] = Σ w_i r_i[t]. Theoretically clean and
- *    keeps the portfolio fixed at the requested weights every day.
- *  - "none" (drift): allocate w_i at t=0, let each leg grow on its own.
- *    Reported "weights" then drift over time.
+ *  - Rebalancing snaps each leg back to its target weight at the start of
+ *    every period. Inside a period weights drift with the market.
+ *      • "daily"   — every trading day (r_p[t] = Σ w_i r_i[t])
+ *      • "weekly"  — at the first trading day of each ISO week
+ *      • "monthly" — at the first trading day of each calendar month
+ *      • "yearly"  — at the first trading day of each calendar year
  */
 export async function composePortfolio(args: {
   legs: LegInput[];
@@ -111,7 +113,7 @@ export async function composePortfolio(args: {
   });
   const benchReturns = simpleDailyReturns(benchClosesAligned);
 
-  const portReturns = computePortfolioReturns(legSeries, args.rebalance);
+  const portReturns = computePortfolioReturns(legSeries, dates, args.rebalance);
   const portWealth = wealthFromReturns(portReturns);
   const benchWealth = wealthFromReturns(benchReturns);
 
@@ -172,42 +174,79 @@ function simpleDailyReturns(closes: number[]): number[] {
   return out;
 }
 
+/**
+ * Portfolio daily return series with rebalancing at period boundaries.
+ *
+ * Algorithm (works for any RebalanceMode):
+ *   1. Initialize per-leg wealth = w_i (∑ = 1).
+ *   2. For each return index i (i.e. close[i] → close[i+1]):
+ *        a) If close[i+1] is the first trading day of a new period
+ *           relative to close[i], reset legWealth[j] = total × w_j.
+ *        b) Apply daily growth: legWealth[j] *= 1 + r_j[i].
+ *        c) Portfolio return = total_after / total_before − 1.
+ *
+ * In daily mode condition (a) fires every step, collapsing to the clean
+ * Σ w_j r_j[i] formula. In weekly/monthly/yearly mode weights drift
+ * within the period and snap back to the target on the first trading
+ * day of the next period.
+ */
 function computePortfolioReturns(
   legs: LegSeries[],
+  dates: string[],
   rebalance: RebalanceMode,
 ): number[] {
   const n = legs[0]?.returns.length ?? 0;
-  if (rebalance === "daily") {
-    const out = new Array(n).fill(0);
-    for (let i = 0; i < n; i++) {
-      let r = 0;
-      let used = 0;
-      for (const leg of legs) {
-        const ri = leg.returns[i];
-        if (Number.isFinite(ri)) {
-          r += leg.weight * ri;
-          used += leg.weight;
-        }
-      }
-      out[i] = used > 0 ? r / used : 0;
-    }
-    return out;
-  }
-  // "none" — drift: track per-leg wealth, then aggregate.
-  const wealth = legs.map((leg) => leg.weight);
+  const weights = legs.map((l) => l.weight);
+  let legWealth = weights.slice();
+  let totalWealth = legWealth.reduce((s, x) => s + x, 0);
   const out: number[] = [];
   for (let i = 0; i < n; i++) {
-    let prevTotal = wealth.reduce((s, x) => s + x, 0);
+    const prevIso = dates[i];
+    const nextIso = dates[i + 1] ?? prevIso;
+    const crossesBoundary =
+      i > 0 && isNewPeriod(prevIso, nextIso, rebalance);
+    if (crossesBoundary) {
+      for (let j = 0; j < legs.length; j++) {
+        legWealth[j] = totalWealth * weights[j];
+      }
+    }
+    const prevTotal = legWealth.reduce((s, x) => s + x, 0);
     let nextTotal = 0;
     for (let j = 0; j < legs.length; j++) {
       const ri = legs[j].returns[i];
       const grow = Number.isFinite(ri) ? 1 + ri : 1;
-      wealth[j] *= grow;
-      nextTotal += wealth[j];
+      legWealth[j] *= grow;
+      nextTotal += legWealth[j];
     }
+    totalWealth = nextTotal;
     out.push(prevTotal > 0 ? nextTotal / prevTotal - 1 : 0);
   }
   return out;
+}
+
+function isNewPeriod(prevIso: string, nextIso: string, mode: RebalanceMode): boolean {
+  if (mode === "daily") return true;
+  return periodKey(prevIso, mode) !== periodKey(nextIso, mode);
+}
+
+function periodKey(iso: string, mode: RebalanceMode): string {
+  if (mode === "yearly") return iso.slice(0, 4);
+  if (mode === "monthly") return iso.slice(0, 7);
+  if (mode === "weekly") {
+    const d = new Date(iso + "T00:00:00Z");
+    return isoWeekKey(d);
+  }
+  return iso;
+}
+
+/** ISO week key like "2025-W14". UTC-based for stability. */
+function isoWeekKey(d: Date): string {
+  const tmp = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = tmp.getUTCDay() || 7;
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((tmp.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${tmp.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
 function wealthFromReturns(returns: number[]): number[] {

@@ -5,7 +5,14 @@ import { useCallback, useMemo, useState } from "react";
 import { TickerAutocomplete } from "@/components/bt/TickerAutocomplete";
 
 type Mode = "years" | "inception" | "custom";
-type Rebalance = "daily" | "none";
+type Rebalance = "daily" | "weekly" | "monthly" | "yearly";
+
+const REBAL_LABEL: Record<Rebalance, string> = {
+  daily: "일간 리밸런싱",
+  weekly: "주간 리밸런싱",
+  monthly: "월간 리밸런싱",
+  yearly: "연간 리밸런싱",
+};
 
 interface LegRow {
   id: string;
@@ -378,14 +385,16 @@ export default function PortfolioAnalyzer() {
             />
           </label>
           <label className="space-y-1">
-            <span className="text-gray-500 text-[11px]">리밸런싱</span>
+            <span className="text-gray-500 text-[11px]">리밸런싱 주기</span>
             <select
               value={rebalance}
               onChange={(e) => setRebalance(e.target.value as Rebalance)}
               className="w-full rounded-lg bg-bg-soft border border-border px-2 py-1.5 text-gray-100"
             >
-              <option value="daily">일간 리밸런싱 (이론적)</option>
-              <option value="none">리밸런싱 없음 (드리프트)</option>
+              <option value="daily">일간</option>
+              <option value="weekly">주간 (ISO 주 시작)</option>
+              <option value="monthly">월간 (월초 거래일)</option>
+              <option value="yearly">연간 (연초 거래일)</option>
             </select>
           </label>
           <label className="space-y-1">
@@ -428,7 +437,7 @@ function Results({ data }: { data: ApiResponse }) {
           <div className="text-[11px] text-gray-500">
             {data.startDate} ~ {data.endDate} · {data.tradingDays}거래일 ·
             벤치마크 <span className="text-gray-300">{data.benchmark}</span> ·{" "}
-            {data.rebalance === "daily" ? "일간 리밸런싱" : "드리프트"} · rf{" "}
+            {REBAL_LABEL[data.rebalance] ?? data.rebalance} · rf{" "}
             {(data.riskFreeAnnual * 100).toFixed(2)}%
           </div>
         </div>
