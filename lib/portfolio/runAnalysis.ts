@@ -17,11 +17,13 @@ import {
   drawdownStatsFromWealth,
   legStats,
   riskAdjusted,
+  runUpStatsFromWealth,
   type CapmStats,
   type CorrelationMatrix,
   type DrawdownStats,
   type LegStats,
   type RiskAdjusted,
+  type RunUpStats,
 } from "./metrics";
 
 export interface PortfolioAnalysisInput {
@@ -122,6 +124,8 @@ export interface PortfolioAnalysisResult {
   risk: RiskAdjusted;
   benchRisk: RiskAdjusted;
   drawdown: { portfolio: DrawdownStats; benchmark: DrawdownStats };
+  /** Max run-up (peak-from-trough rally) — symmetric to MDD. */
+  runup: { portfolio: RunUpStats; benchmark: RunUpStats };
   legs: LegStats[];
   correlation: CorrelationMatrix;
 
@@ -175,6 +179,8 @@ export async function runPortfolioAnalysis(
 
   const ddPort = drawdownStatsFromWealth(composed.portWealth, composed.dates);
   const ddBench = drawdownStatsFromWealth(composed.benchWealth, composed.dates);
+  const ruPort = runUpStatsFromWealth(composed.portWealth, composed.dates);
+  const ruBench = runUpStatsFromWealth(composed.benchWealth, composed.dates);
 
   const risk = riskAdjusted(composed.portReturns, ddPort.mdd, riskFreeAnnual);
   const benchRisk = riskAdjusted(composed.benchReturns, ddBench.mdd, riskFreeAnnual);
@@ -264,6 +270,7 @@ export async function runPortfolioAnalysis(
     risk,
     benchRisk,
     drawdown: { portfolio: ddPort, benchmark: ddBench },
+    runup: { portfolio: ruPort, benchmark: ruBench },
     legs: legBreakdown,
     correlation: corr,
     wealthSeries,

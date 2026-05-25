@@ -196,6 +196,76 @@ export function drawdownStatsFromWealth(
   };
 }
 
+/* ──────────── max run-up (mirror of drawdown) ──────────── */
+
+export interface RunUpStats {
+  /** Max run-up as a positive fraction (e.g. 0.65 = +65%). */
+  mru: number;
+  /** ISO date of the trough where the worst run-up started. */
+  troughDate: string;
+  /** ISO date of the peak that ends the worst run-up. */
+  peakDate: string;
+  /** Run-up from the running minimum to the most recent sample. */
+  current: number;
+  /** Length of the run in trading days (trough → peak). */
+  ascentDays: number;
+  /** Number of trading days the wealth stayed at-or-below the trough min
+   *  before the rally took off (length of the consolidation). */
+  preTroughDays: number;
+}
+
+/**
+ * Largest peak-from-trough rise in the wealth path. Symmetric to the
+ * standard "max drawdown" computation: track the running *minimum* and
+ * keep the highest `wealth / runningMin − 1` observed.
+ */
+export function runUpStatsFromWealth(
+  wealth: number[],
+  dates: string[],
+): RunUpStats {
+  const n = wealth.length;
+  if (n < 2) {
+    return {
+      mru: 0,
+      troughDate: dates[0] ?? "",
+      peakDate: dates[0] ?? "",
+      current: 0,
+      ascentDays: 0,
+      preTroughDays: 0,
+    };
+  }
+  let runningMin = Infinity;
+  let runningMinIdx = 0;
+  let mru = 0;
+  let bestTroughIdx = 0;
+  let bestPeakIdx = 0;
+  for (let i = 0; i < n; i++) {
+    const w = wealth[i];
+    if (!Number.isFinite(w) || w <= 0) continue;
+    if (w < runningMin) {
+      runningMin = w;
+      runningMinIdx = i;
+    }
+    const ru = runningMin > 0 ? w / runningMin - 1 : 0;
+    if (ru > mru) {
+      mru = ru;
+      bestTroughIdx = runningMinIdx;
+      bestPeakIdx = i;
+    }
+  }
+  const last = wealth[n - 1];
+  const current =
+    Number.isFinite(last) && runningMin > 0 ? last / runningMin - 1 : 0;
+  return {
+    mru,
+    troughDate: dates[bestTroughIdx] ?? "",
+    peakDate: dates[bestPeakIdx] ?? "",
+    current,
+    ascentDays: Math.max(0, bestPeakIdx - bestTroughIdx),
+    preTroughDays: bestTroughIdx,
+  };
+}
+
 /* ──────────── per-leg breakdown ──────────── */
 
 export interface LegStats {

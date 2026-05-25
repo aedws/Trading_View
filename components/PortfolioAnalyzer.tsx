@@ -68,6 +68,15 @@ interface DrawdownStats {
   recoveryDays: number;
 }
 
+interface RunUpStats {
+  mru: number;
+  troughDate: string;
+  peakDate: string;
+  current: number;
+  ascentDays: number;
+  preTroughDays: number;
+}
+
 interface LegStats {
   ticker: string;
   weight: number;
@@ -140,6 +149,7 @@ interface ApiResponse {
   risk: RiskAdjusted;
   benchRisk: RiskAdjusted;
   drawdown: { portfolio: DrawdownStats; benchmark: DrawdownStats };
+  runup: { portfolio: RunUpStats; benchmark: RunUpStats };
   legs: LegStats[];
   correlation: { labels: string[]; values: number[][] };
   wealthSeries: Array<{ date: string; portfolio: number; benchmark: number }>;
@@ -880,8 +890,8 @@ function Results({ data }: { data: ApiResponse }) {
           <Metric label="TWR 지수" value={`${num(data.portfolio.finalWealth, 3)}×`} />
           <Metric label="알파(연)" value={pct(data.capm.alpha)} accent="green" />
           <Metric label="베타" value={num(data.capm.beta, 2)} accent="blue" />
-          <Metric label="R²" value={pct(data.capm.r2)} />
           <Metric label="MDD" value={pct(data.drawdown.portfolio.mdd)} accent="red" />
+          <Metric label="최대 상승" value={pct(data.runup.portfolio.mru)} accent="green" />
         </div>
       </section>
 
@@ -938,6 +948,7 @@ function Results({ data }: { data: ApiResponse }) {
               <Row name="CAGR" a={data.portfolio.cagr} b={data.benchmarkStats.cagr} fmt="pct" />
               <Row name="연 변동성" a={data.portfolio.volAnnual} b={data.benchmarkStats.volAnnual} fmt="pct" lowerBetter />
               <Row name="MDD" a={data.drawdown.portfolio.mdd} b={data.drawdown.benchmark.mdd} fmt="pct" lowerBetter />
+              <Row name="최대 상승 (MRU)" a={data.runup.portfolio.mru} b={data.runup.benchmark.mru} fmt="pct" />
               <Row name="Sharpe" a={data.risk.sharpe} b={data.benchRisk.sharpe} fmt="num" />
               <Row name="Sortino" a={data.risk.sortino} b={data.benchRisk.sortino} fmt="num" />
               <Row name="Calmar" a={data.risk.calmar} b={data.benchRisk.calmar} fmt="num" />
@@ -975,6 +986,19 @@ function Results({ data }: { data: ApiResponse }) {
           <DdCard title={`벤치 (${data.benchmark})`} dd={data.drawdown.benchmark} />
         </div>
         <DrawdownChart series={data.drawdownSeries} benchLabel={data.benchmark} />
+      </section>
+
+      <section className="rounded-xl border border-border bg-bg-card p-4 space-y-3">
+        <h3 className="text-sm font-medium text-gray-200">최대 상승 분석 (MRU)</h3>
+        <div className="grid sm:grid-cols-2 gap-3 text-xs">
+          <RuCard title="포트폴리오" ru={data.runup.portfolio} />
+          <RuCard title={`벤치 (${data.benchmark})`} ru={data.runup.benchmark} />
+        </div>
+        <p className="text-[11px] text-gray-500 leading-relaxed">
+          최대 상승(MRU) = 자본곡선에서의 <b>저점→고점</b> 최대 상승률. MDD의 부호를
+          뒤집은 정의. 같은 구간에 큰 MRU와 큰 MDD가 함께 있으면 변동성이 크고,
+          MRU/|MDD| 비율이 높을수록 회복 탄력이 강했다는 의미입니다.
+        </p>
       </section>
 
       <section className="rounded-xl border border-border bg-bg-card p-4 space-y-2">
@@ -1287,6 +1311,23 @@ function DdCard({ title, dd }: { title: string; dd: DrawdownStats }) {
             : "미회복"}
         </div>
         <div>현재 낙폭 {pct(dd.current)}</div>
+      </div>
+    </div>
+  );
+}
+
+function RuCard({ title, ru }: { title: string; ru: RunUpStats }) {
+  return (
+    <div className="rounded-lg border border-border-soft bg-bg-soft/40 p-3 space-y-1">
+      <div className="text-[11px] text-gray-500">{title}</div>
+      <div className="text-base font-semibold num text-accent-green">
+        +{pct(ru.mru)}
+      </div>
+      <div className="text-[11px] text-gray-400 space-y-0.5">
+        <div>
+          저점 {ru.troughDate} → 고점 {ru.peakDate} ({ru.ascentDays}일)
+        </div>
+        <div>현재 저점 대비 상승 {pct(ru.current)}</div>
       </div>
     </div>
   );
