@@ -144,6 +144,10 @@ export async function POST(req: Request) {
     };
   }
 
+  const investStartRaw = typeof body.investStart === "string" ? body.investStart.trim() : "";
+  const investStart =
+    /^\d{4}-\d{2}-\d{2}$/.test(investStartRaw) ? investStartRaw : undefined;
+
   try {
     const result = await runPortfolioAnalysis({
       legs,
@@ -155,6 +159,7 @@ export async function POST(req: Request) {
       rebalance,
       riskFreeAnnual,
       invest,
+      investStart,
     });
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {

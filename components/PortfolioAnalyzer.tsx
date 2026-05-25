@@ -126,6 +126,7 @@ interface ApiResponse {
   requestedRange: { start: string; end: string };
   effectiveRange: { start: string; end: string };
   bindingLeg: { ticker: string; firstDate: string } | null;
+  investStartClampedByUser: boolean;
   legInceptions: Array<{ ticker: string; firstDate: string }>;
   dividendRouting: Array<{
     ticker: string;
@@ -228,6 +229,7 @@ export default function PortfolioAnalyzer() {
   const [lumpAmount, setLumpAmount] = useState(10000);
   const [dcaAmount, setDcaAmount] = useState(500);
   const [dcaFreq, setDcaFreq] = useState<DcaFrequency>("monthly");
+  const [investStart, setInvestStart] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [data, setData] = useState<ApiResponse | null>(null);
@@ -362,6 +364,9 @@ export default function PortfolioAnalyzer() {
               dcaAmount: Number.isFinite(dcaAmount) ? dcaAmount : 500,
               dcaFrequency: dcaFreq,
             }),
+        ...(investStart && /^\d{4}-\d{2}-\d{2}$/.test(investStart)
+          ? { investStart }
+          : {}),
       };
       const res = await fetch("/api/portfolio", {
         method: "POST",
@@ -392,6 +397,7 @@ export default function PortfolioAnalyzer() {
     lumpAmount,
     dcaAmount,
     dcaFreq,
+    investStart,
   ]);
 
   return (
@@ -773,6 +779,18 @@ export default function PortfolioAnalyzer() {
                   className="w-full rounded-lg bg-bg-card border border-border px-2 py-1.5 text-gray-100"
                 />
               </label>
+              <label className="space-y-1">
+                <span className="text-gray-500 text-[11px]">투자 시작일 (선택)</span>
+                <input
+                  type="date"
+                  value={investStart}
+                  onChange={(e) => setInvestStart(e.target.value)}
+                  className="w-full rounded-lg bg-bg-card border border-border px-2 py-1.5 text-gray-100"
+                />
+                <span className="block text-[10px] text-gray-500 leading-tight">
+                  비우면 분석 시작일과 동일. 입력하면 그 날짜에 거치 매수.
+                </span>
+              </label>
             </div>
           ) : (
             <div className="grid sm:grid-cols-3 gap-3 text-sm">
@@ -800,6 +818,18 @@ export default function PortfolioAnalyzer() {
                   <option value="quarterly">분기 (분기초 거래일)</option>
                 </select>
               </label>
+              <label className="space-y-1">
+                <span className="text-gray-500 text-[11px]">투자 시작일 (선택)</span>
+                <input
+                  type="date"
+                  value={investStart}
+                  onChange={(e) => setInvestStart(e.target.value)}
+                  className="w-full rounded-lg bg-bg-card border border-border px-2 py-1.5 text-gray-100"
+                />
+                <span className="block text-[10px] text-gray-500 leading-tight">
+                  비우면 분석 시작일과 동일. 입력하면 그 날짜부터 적립.
+                </span>
+              </label>
             </div>
           )}
         </div>
@@ -825,21 +855,48 @@ export default function PortfolioAnalyzer() {
 function Results({ data }: { data: ApiResponse }) {
   const reqStart = data.requestedRange.start;
   const effStart = data.effectiveRange.start;
-  const clampedStart = !!reqStart && reqStart < effStart;
+  const clampedByYouth =
+    !!data.bindingLeg && !data.investStartClampedByUser &&
+    !!reqStart && reqStart < effStart;
   return (
     <>
-      {data.bindingLeg && clampedStart ? (
+      {clampedByYouth ? (
         <div className="rounded-lg border border-accent-blue/40 bg-accent-blue/5 px-3 py-2 text-[12px] text-gray-200 flex flex-wrap items-center justify-between gap-2">
           <span>
             기간이 신생 종목 기준으로 자동 정렬되었습니다 →{" "}
             <span className="font-mono text-accent-blue">
-              {data.bindingLeg.ticker}
+              {data.bindingLeg!.ticker}
             </span>{" "}
-            상장 이후 ({data.bindingLeg.firstDate}). 요청{" "}
+            상장 이후 ({data.bindingLeg!.firstDate}). 요청{" "}
             <span className="text-gray-400">
               {data.requestedRange.start} ~ {data.requestedRange.end}
             </span>{" "}
             → 실제{" "}
+            <span className="text-gray-100">
+              {data.effectiveRange.start} ~ {data.effectiveRange.end}
+            </span>
+          </span>
+        </div>
+      ) : null}
+
+      {data.investStartClampedByUser ? (
+        <div className="rounded-lg border border-accent-green/40 bg-accent-green/5 px-3 py-2 text-[12px] text-gray-200 flex flex-wrap items-center justify-between gap-2">
+          <span>
+            사용자 지정 <b>투자 시작일</b>이 적용되었습니다 →{" "}
+            <span className="font-mono text-accent-green">
+              {data.effectiveRange.start}
+            </span>
+            {data.bindingLeg ? (
+              <span className="text-gray-500">
+                {" "}
+                (신생 종목 인셉션 {data.bindingLeg.firstDate})
+              </span>
+            ) : null}
+            . 데이터 fetch{" "}
+            <span className="text-gray-400">
+              {data.requestedRange.start} ~ {data.requestedRange.end}
+            </span>{" "}
+            → 분석 구간{" "}
             <span className="text-gray-100">
               {data.effectiveRange.start} ~ {data.effectiveRange.end}
             </span>

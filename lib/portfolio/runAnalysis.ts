@@ -36,6 +36,8 @@ export interface PortfolioAnalysisInput {
   rebalance: RebalanceMode;
   riskFreeAnnual?: number;
   invest: InvestConfig;
+  /** Optional explicit investment start date (YYYY-MM-DD). */
+  investStart?: string;
 }
 
 export interface SeriesPoint {
@@ -94,6 +96,8 @@ export interface PortfolioAnalysisResult {
   effectiveRange: { start: string; end: string };
   /** Which leg is forcing the start = youngest listing date. */
   bindingLeg: { ticker: string; firstDate: string } | null;
+  /** True if the user explicitly overrode the start via `investStart`. */
+  investStartClampedByUser: boolean;
   /** Per-leg first available date (independent of intersection). */
   legInceptions: Array<{ ticker: string; firstDate: string }>;
   /** Resolved per-leg dividend distribution (each sums to 1.0). */
@@ -175,6 +179,7 @@ export async function runPortfolioAnalysis(
     end: input.end,
     rebalance: input.rebalance,
     invest: input.invest,
+    investStart: input.investStart,
   });
 
   const startDate = composed.dates[0];
@@ -260,6 +265,7 @@ export async function runPortfolioAnalysis(
     requestedRange: composed.requestedRange,
     effectiveRange: composed.effectiveRange,
     bindingLeg: composed.bindingLeg,
+    investStartClampedByUser: composed.investStartClampedByUser,
     legInceptions: composed.legs.map((l) => ({
       ticker: l.ticker,
       firstDate: l.firstDate,

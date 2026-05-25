@@ -81,6 +81,8 @@ export interface ComposedSeries {
   effectiveRange: { start: string; end: string };
   /** Which leg's listing date is forcing the start (=oldest first-bar). */
   bindingLeg: { ticker: string; firstDate: string } | null;
+  /** Did the user explicitly clamp the start with `investStart`? */
+  investStartClampedByUser: boolean;
 
   /** Selected investing scheme (lump-sum vs DCA). */
   investMode: InvestMode;
@@ -125,6 +127,16 @@ export async function composePortfolio(args: {
   end?: string;
   rebalance: RebalanceMode;
   invest: InvestConfig;
+  /**
+   * Optional investment start date (YYYY-MM-DD), independent of the
+   * data-fetch window. If omitted / empty / earlier than the data-driven
+   * minimum, the analysis starts at the youngest leg's first available
+   * trading day (= original behaviour). When set later than that, the
+   * data is still fetched from `args.start` (so the user can preview
+   * the surrounding period elsewhere) but the simulator + all metrics
+   * only use the slice from `investStart` onward.
+   */
+  investStart?: string;
 }): Promise<ComposedSeries> {
   if (args.legs.length === 0) {
     throw new Error("최소 1개 종목이 필요합니다.");
@@ -195,12 +207,29 @@ export async function composePortfolio(args: {
     ...legFetches.map((f) => f.prices),
     benchFetch.prices,
   ];
-  const dates = intersectDates(allSeries);
-  if (dates.length < 30) {
+  const fullDates = intersectDates(allSeries);
+  if (fullDates.length < 30) {
     throw new Error(
-      `공통 거래일이 부족합니다 (${dates.length}일). 기간을 늘리거나 종목을 줄여보세요.`,
+      `공통 거래일이 부족합니다 (${fullDates.length}일). 기간을 늘리거나 종목을 줄여보세요.`,
     );
   }
+
+  // Optional `investStart`: further clamp the analysis window. Useful when
+  // the user wants the data window and the actual investment start point
+  // to be separate ("buy from 2023, but show the surrounding history").
+  const investStartIso = (args.investStart ?? "").trim();
+  let dates = fullDates;
+  if (investStartIso) {
+    const sliced = fullDates.filter((d) => d >= investStartIso);
+    if (sliced.length < 30) {
+      throw new Error(
+        `투자 시작일 이후 공통 거래일이 부족합니다 (${sliced.length}일). 시작일을 더 앞으로 옮겨보세요.`,
+      );
+    }
+    dates = sliced;
+  }
+  const investStartClampedByUser =
+    !!investStartIso && dates[0] !== fullDates[0];
 
   const aligned = allSeries.map((s) => alignToDates(s, dates));
   const benchClosesAligned = aligned[aligned.length - 1];
@@ -317,6 +346,7 @@ export async function composePortfolio(args: {
     requestedRange: { start: requestedStart, end: requestedEnd },
     effectiveRange: { start: dates[0], end: dates[dates.length - 1] },
     bindingLeg,
+    investStartClampedByUser,
     investMode: args.invest.mode,
     portNominalWealth: sim.nominalWealth,
     benchNominalWealth: benchSim.nominalWealth,
