@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import GmailShell from "@/components/GmailShell";
 
 export const metadata: Metadata = {
-  title: "시장분석기 — 수학 지표 대시보드",
+  title: "받은편지함 (1,247) - user@gmail.com - Gmail",
   description:
-    "TradingView 차트와 통계·장세·리스크·주기 분석 지표를 한 페이지에서. 각 지표의 수식·의미·신호·주의를 한국어로 해설합니다.",
+    "Gmail은 무료로 안전한 이메일 환경을 제공합니다. 받은편지함을 정리하고 빠르게 검색하세요.",
 };
 
 export default function RootLayout({
@@ -15,7 +16,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className="min-h-screen bg-bg text-gray-100 antialiased">
-        {children}
+        <GmailShell>{children}</GmailShell>
       </body>
     </html>
   );
