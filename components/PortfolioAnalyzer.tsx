@@ -402,17 +402,39 @@ export default function PortfolioAnalyzer() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-border bg-bg-card p-4 space-y-4">
+      <section className="overflow-hidden rounded-xl border border-[#3c4043]/70 bg-gradient-to-br from-[#15192a] via-[#11142a] to-[#0a0e1a] shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_10px_30px_-12px_rgba(0,0,0,0.5)]">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-[#3c4043]/50 bg-gradient-to-r from-[#34A853]/[0.08] via-transparent to-transparent">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#34A853] to-[#06b6d4] text-white shadow-sm shrink-0">
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+              <path d="M11 2v20c-5.07-.5-9-4.79-9-10s3.93-9.5 9-10zm2.03 0v8.99H22c-.47-4.74-4.24-8.52-8.97-8.99zm0 11.01V22c4.74-.47 8.5-4.25 8.97-8.99h-8.97z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-[14px] font-semibold tracking-tight text-gray-100 leading-tight">
+              포트폴리오 입력
+            </h2>
+            <p className="text-[10.5px] text-gray-500 leading-tight mt-0.5">
+              Portfolio Solutions · Allocation &amp; Risk
+            </p>
+          </div>
+          <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#34A853]/10 border border-[#34A853]/30 text-[9.5px] font-semibold uppercase tracking-wider text-[#81c995]">
+            <span className="inline-block w-1 h-1 rounded-full bg-[#81c995] animate-pulse" />
+            ALLOCATION
+          </span>
+        </div>
+        <div className="p-5 space-y-4">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <h2 className="text-base font-medium text-gray-100">포트폴리오 입력</h2>
+          <div className="flex items-center gap-2 text-[11px] text-gray-400">
+            <span className="inline-block w-1 h-1 rounded-full bg-gradient-to-br from-[#34A853] to-[#06b6d4]" />
+            <span className="uppercase tracking-wider font-medium">프리셋</span>
+          </div>
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] text-gray-500 mr-1">프리셋:</span>
             {PRESETS.map((p) => (
               <button
                 key={p.label}
                 type="button"
                 onClick={() => applyPreset(p)}
-                className="text-[11px] px-2 py-1 rounded border border-border text-gray-300 hover:text-gray-100 hover:bg-bg-soft"
+                className="text-[11px] px-2 py-1 rounded-md border border-[#3c4043] bg-[#1a2238]/40 text-gray-300 hover:text-white hover:bg-[#1a2238]/70 hover:border-[#5f6368] transition"
               >
                 {p.label}
               </button>
@@ -838,13 +860,36 @@ export default function PortfolioAnalyzer() {
           type="button"
           onClick={() => void run()}
           disabled={loading || legs.length === 0 || !weightOk}
-          className="px-3 py-2 rounded-lg bg-accent-blue text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
+          className="group/btn relative inline-flex items-center gap-2 overflow-hidden rounded-lg bg-gradient-to-br from-[#34A853] to-[#06b6d4] px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_14px_-4px_rgba(52,168,83,0.45)] transition hover:shadow-[0_6px_20px_-6px_rgba(52,168,83,0.6)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
         >
-          {loading ? "계산 중…" : "포트폴리오 분석 실행"}
+          {loading ? (
+            <>
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4 animate-spin"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              >
+                <path d="M12 3a9 9 0 1 0 9 9" />
+              </svg>
+              <span>계산 중…</span>
+            </>
+          ) : (
+            <>
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+              <span>포트폴리오 분석 실행</span>
+              <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover/btn:translate-x-full" />
+            </>
+          )}
         </button>
         {err ? (
           <p className="text-[12px] text-amber-400">{err}</p>
         ) : null}
+        </div>
       </section>
 
       {data ? <Results data={data} /> : null}

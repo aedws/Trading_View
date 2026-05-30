@@ -92,13 +92,32 @@ export default function CoveredCallAnalyzer() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-border bg-bg-card p-4 space-y-4">
-        <h2 className="text-base font-medium text-gray-100">분석 입력</h2>
-        <p className="text-[12px] text-gray-500 leading-relaxed">
-          야후 파이낸스 일봉·분배·분할을 사용합니다. 재투자 3종과 선택한 벤치마크는 서버에서 함께
-          계산됩니다.
-        </p>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+      <section className="overflow-hidden rounded-xl border border-[#3c4043]/70 bg-gradient-to-br from-[#15192a] via-[#11142a] to-[#0a0e1a] shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_10px_30px_-12px_rgba(0,0,0,0.5)]">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-[#3c4043]/50 bg-gradient-to-r from-[#EA4335]/[0.08] via-transparent to-transparent">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#EA4335] to-[#FBBC04] text-white shadow-sm shrink-0">
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-[14px] font-semibold tracking-tight text-gray-100 leading-tight">
+              분석 입력
+            </h2>
+            <p className="text-[10.5px] text-gray-500 leading-tight mt-0.5">
+              Derivatives Desk · Covered Call Strategy
+            </p>
+          </div>
+          <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#EA4335]/10 border border-[#EA4335]/30 text-[9.5px] font-semibold uppercase tracking-wider text-[#f28b82]">
+            <span className="inline-block w-1 h-1 rounded-full bg-[#f28b82] animate-pulse" />
+            OPTIONS
+          </span>
+        </div>
+        <div className="p-5 space-y-4">
+          <p className="text-[12px] text-gray-400 leading-relaxed">
+            야후 파이낸스 일봉·분배·분할을 사용합니다. 재투자 3종과 선택한
+            벤치마크는 서버에서 함께 계산됩니다.
+          </p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
           <label className="space-y-1">
             <span className="text-gray-500 text-[11px]">티커</span>
             <TickerAutocomplete
@@ -178,19 +197,45 @@ export default function CoveredCallAnalyzer() {
             />
           </label>
         </div>
-        <button
-          type="button"
-          onClick={() => void run()}
-          disabled={loading}
-          className="px-4 py-2 rounded-lg bg-accent-blue text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
-        >
-          {loading ? "계산 중…" : "야후 데이터로 분석"}
-        </button>
-        {err && (
-          <div className="rounded-lg border border-accent-red/40 bg-accent-red/10 px-3 py-2 text-sm text-accent-red">
-            {err}
-          </div>
-        )}
+          <button
+            type="button"
+            onClick={() => void run()}
+            disabled={loading}
+            className="group/btn relative inline-flex items-center gap-2 overflow-hidden rounded-lg bg-gradient-to-br from-[#EA4335] to-[#FBBC04] px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_14px_-4px_rgba(234,67,53,0.45)] transition hover:shadow-[0_6px_20px_-6px_rgba(234,67,53,0.6)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
+          >
+            {loading ? (
+              <>
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4 animate-spin"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                >
+                  <path d="M12 3a9 9 0 1 0 9 9" />
+                </svg>
+                <span>계산 중…</span>
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+                <span>야후 데이터로 분석</span>
+                <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover/btn:translate-x-full" />
+              </>
+            )}
+          </button>
+          {err && (
+            <div className="flex items-start gap-2 rounded-lg border border-accent-red/40 bg-accent-red/10 px-3 py-2 text-sm text-accent-red">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 mt-0.5" fill="currentColor">
+                <path d="M12 5.99L19.53 19H4.47L12 5.99M12 2L1 21h22L12 2zm1 14h-2v2h2v-2zm0-6h-2v4h2v-4z" />
+              </svg>
+              <span>{err}</span>
+            </div>
+          )}
+        </div>
       </section>
 
       {data && primary && (
