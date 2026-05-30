@@ -7,6 +7,7 @@ import EmailPane, {
   EmailAttachment,
   EmailSection,
 } from "@/components/EmailPane";
+import { TICKER_SELECTED_EVENT } from "@/components/InboxList";
 import TickerInput from "@/components/TickerInput";
 import TradingViewEmbed from "@/components/TradingViewEmbed";
 import YahooCloseChart from "@/components/YahooCloseChart";
@@ -89,6 +90,36 @@ export default function HomePage() {
       /* ignore */
     }
   }, [ticker, bootstrapped]);
+
+  /** 받은편지함(InboxList)이나 다른 컴포넌트에서 티커를 바꿨을 때 동기화 */
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (typeof detail === "string" && detail) {
+        setTicker((prev) => (prev === detail ? prev : detail));
+      }
+    };
+    window.addEventListener(TICKER_SELECTED_EVENT, handler);
+    return () => window.removeEventListener(TICKER_SELECTED_EVENT, handler);
+  }, []);
+
+  /** 사용자가 직접 티커를 바꾼 경우 — 다른 컴포넌트에도 알림 */
+  const changeTicker = useCallback((next: string) => {
+    const normalized = normalizeTicker(String(next ?? "").trim());
+    if (!normalized) return;
+    setTicker((prev) => {
+      if (prev === normalized) return prev;
+      try {
+        sessionStorage.setItem(TICKER_STORAGE_KEY, normalized);
+      } catch {
+        /* ignore */
+      }
+      window.dispatchEvent(
+        new CustomEvent(TICKER_SELECTED_EVENT, { detail: normalized })
+      );
+      return normalized;
+    });
+  }, []);
 
   const load = useCallback(async (t: string, r: RangeKey) => {
     if (!t.trim()) return;
@@ -207,14 +238,7 @@ export default function HomePage() {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <label className="flex items-center gap-2 min-w-[260px] flex-1">
             <span className="text-[12px] text-gray-400 shrink-0">종목:</span>
-            <TickerInput
-              initial={ticker}
-              onSubmit={(t) => {
-                const raw = String(t ?? "").trim();
-                if (!raw) return;
-                setTicker(normalizeTicker(raw));
-              }}
-            />
+            <TickerInput initial={ticker} onSubmit={changeTicker} />
           </label>
 
           <div className="flex items-center gap-2">
@@ -260,10 +284,7 @@ export default function HomePage() {
       </EmailSection>
       <MarketTickerStrip
         selectedSymbol={ticker}
-        onSelectSymbol={(yahooSymbol) => {
-          const n = normalizeTicker(yahooSymbol);
-          if (n) setTicker(n);
-        }}
+        onSelectSymbol={changeTicker}
       />
 
       {/* 섹션 2: 차트 */}

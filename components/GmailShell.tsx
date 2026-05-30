@@ -2,10 +2,11 @@
 
 import { useState, type ReactNode } from "react";
 
+import InboxList from "./InboxList";
+
 /**
  * Gmail(다크 모드 신버전) 위장 셸.
- * 상단바 + 좌측 사이드바만 Gmail UI로 덧씌우고, 내부 콘텐츠 영역에는
- * 기존 페이지(children)를 그대로 렌더링합니다.
+ * 3-컬럼 레이아웃: 좌측 폴더 사이드바 + 가운데 받은편지함 리스트 + 우측 열린 메일.
  */
 
 type FolderKey =
@@ -345,6 +346,9 @@ export default function GmailShell({ children }: { children: ReactNode }) {
             </div>
           )}
         </aside>
+
+        {/* ---- 받은편지함 리스트 (가운데 컬럼) ---- */}
+        <InboxList />
 
         {/* ---- 메인(메일 본문) 패널 ---- */}
         <main className="flex-1 min-w-0 m-2 ml-0 rounded-2xl bg-bg border border-[#3c4043]/60 overflow-auto shadow-inner">
