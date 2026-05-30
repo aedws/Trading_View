@@ -43,3 +43,26 @@ body {
   font-variant-numeric: tabular-nums;
   font-family: "JetBrains Mono", Consolas, monospace;
 }
+
+/* 뉴스 리스트 페이드인 (staggered) */
+@keyframes newsItemFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.news-item {
+  opacity: 0;
+  animation: newsItemFadeIn 0.32s ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .news-item {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

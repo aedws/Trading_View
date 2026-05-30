@@ -8,6 +8,7 @@ import EmailPane, {
   EmailSection,
 } from "@/components/EmailPane";
 import { TICKER_SELECTED_EVENT } from "@/components/InboxList";
+import NewsList from "@/components/NewsList";
 import TickerInput from "@/components/TickerInput";
 import TradingViewEmbed from "@/components/TradingViewEmbed";
 import YahooCloseChart from "@/components/YahooCloseChart";
@@ -286,6 +287,12 @@ export default function HomePage() {
         selectedSymbol={ticker}
         onSelectSymbol={changeTicker}
       />
+
+      {/* 관련 시장 뉴스 */}
+      <div className="mt-5 text-[13px] text-gray-300">
+        관련해서 시장에서 주목받는 뉴스도 함께 정리했습니다.
+      </div>
+      <NewsList seed={ticker} max={10} className="mt-2" />
 
       {/* 섹션 2: 차트 */}
       <EmailSection number={2} title={`${ticker} 가격 차트`}>
